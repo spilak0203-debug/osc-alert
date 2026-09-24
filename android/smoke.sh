@@ -78,6 +78,11 @@ shot 2c-sort-rise
 tap_text "가나다순" && sleep 3
 shot 2d-sort-name
 tap_text "즐겨찾기순" && sleep 3
+for i in 1 2 3 4; do adb shell input swipe 540 1900 540 600 200; sleep 1; done
+sleep 2
+shot 2e-scrolled
+tap_text "맨 위로" && sleep 4
+shot 2f-back-to-top
 tap_text "삼성전자" && sleep 12
 shot 3-stock-expanded
 # Vertical drags that start on a chart must scroll the list.

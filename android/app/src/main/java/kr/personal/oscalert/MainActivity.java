@@ -175,10 +175,32 @@ public class MainActivity extends AppCompatActivity implements Repo.Listener {
                     Snackbar.make(findViewById(R.id.content), "새 버전(" + r.name + ")이 있습니다", Snackbar.LENGTH_INDEFINITE)
                             .setAnchorView(R.id.nav)
                             .setAction("설치", v -> AppUpdate.install(this, r))
+                            .addCallback(new Snackbar.Callback() {
+                                @Override
+                                public void onShown(Snackbar s) {
+                                    // Keep the back-to-top buttons above the snackbar.
+                                    liftButtons(s.getView().getHeight()
+                                            + Math.round(8 * getResources().getDisplayMetrics().density));
+                                }
+
+                                @Override
+                                public void onDismissed(Snackbar s, int event) {
+                                    liftButtons(0);
+                                }
+                            })
                             .show();
                 });
             } catch (Exception ignored) {
             }
         }).start();
+    }
+
+    /** How far the lists' floating buttons sit above their normal place, in px. */
+    static int buttonLift;
+
+    private void liftButtons(int px) {
+        buttonLift = px;
+        for (androidx.fragment.app.Fragment f : getSupportFragmentManager().getFragments())
+            if (f instanceof ListFragment) ((ListFragment) f).lift();
     }
 }

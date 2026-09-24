@@ -36,6 +36,7 @@ public class ListFragment extends Fragment implements Repo.Listener {
     private TextView status;
     private View progress;
     private String query = "";
+    private com.google.android.material.floatingactionbutton.FloatingActionButton top;
     private final Map<Signals.Kind, StockAdapter.Section> headers = new EnumMap<>(Signals.Kind.class);
 
     static ListFragment create(boolean summary) {
@@ -63,6 +64,22 @@ public class ListFragment extends Fragment implements Repo.Listener {
             if (at >= 0) lm.scrollToPositionWithOffset(at, 0);
         });
         list.setAdapter(adapter);
+        // "Back to top" shows once the list is a few screens down.
+        top = v.findViewById(R.id.to_top);
+        lift();
+        list.addOnScrollListener(new RecyclerView.OnScrollListener() {
+            @Override
+            public void onScrolled(@NonNull RecyclerView rv, int dx, int dy) {
+                boolean far = lm.findFirstVisibleItemPosition() > 4;
+                if (far) top.show(); else top.hide();
+            }
+        });
+        top.setOnClickListener(x -> {
+            // Jump close first so a long list doesn't animate through thousands of rows.
+            if (lm.findFirstVisibleItemPosition() > 20) list.scrollToPosition(20);
+            list.post(() -> list.smoothScrollToPosition(0));
+            top.hide();
+        });
         refresh.setOnRefreshListener(() -> Repo.refresh(requireContext(), !summary));
         if (!summary) {
             v.findViewById(R.id.search_box).setVisibility(View.VISIBLE);
@@ -128,6 +145,10 @@ public class ListFragment extends Fragment implements Repo.Listener {
     @Override
     public void onChanged() {
         if (isAdded()) render();
+    }
+
+    void lift() {
+        if (top != null) top.animate().translationY(-MainActivity.buttonLift).setDuration(150).start();
     }
 
     void render() {

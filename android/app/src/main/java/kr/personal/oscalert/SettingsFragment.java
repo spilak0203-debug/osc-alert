@@ -33,12 +33,17 @@ public class SettingsFragment extends Fragment {
     private TextView version;
     private MaterialButton updateButton;
     private AppUpdate.Release release;
+    private ScrollView scroll;
+    /** Where the font row sat on screen before a font change recreated the page; MIN_VALUE if none. */
+    private static int fontRowOnScreen = Integer.MIN_VALUE;
 
     @Nullable
     @Override
     public View onCreateView(@NonNull LayoutInflater inf, @Nullable ViewGroup parent, @Nullable Bundle state) {
         Context c = requireContext();
-        ScrollView scroll = new ScrollView(c);
+        // A fixed id lets the page keep its scroll position when a theme change recreates it.
+        scroll = new ScrollView(c);
+        scroll.setId(R.id.settings_scroll);
         root = new LinearLayout(c);
         root.setOrientation(LinearLayout.VERTICAL);
         root.setPadding(dp(16), dp(4), dp(16), dp(32));
@@ -120,13 +125,26 @@ public class SettingsFragment extends Fragment {
         pct.setTextAppearance(R.style.TextAppearance_Osc_BodyLarge);
         pct.setPadding(dp(16), 0, dp(16), 0);
         pct.setText(String.format(Locale.KOREA, "%.0f%%", Settings.fontScale(c) * 100));
-        smaller.setOnClickListener(v -> ((MainActivity) requireActivity()).changeFont(-1));
-        larger.setOnClickListener(v -> ((MainActivity) requireActivity()).changeFont(1));
+        smaller.setOnClickListener(v -> {
+            fontRowOnScreen = font.getTop() - scroll.getScrollY();
+            ((MainActivity) requireActivity()).changeFont(-1);
+        });
+        larger.setOnClickListener(v -> {
+            fontRowOnScreen = font.getTop() - scroll.getScrollY();
+            ((MainActivity) requireActivity()).changeFont(1);
+        });
         font.setGravity(android.view.Gravity.CENTER_VERTICAL);
         font.addView(smaller);
         font.addView(pct);
         font.addView(larger);
         root.addView(font);
+        if (fontRowOnScreen != Integer.MIN_VALUE) {
+            // Text sizes changed, so put the font row back where the finger was rather than
+            // restoring the old scroll offset.
+            int keep = fontRowOnScreen;
+            fontRowOnScreen = Integer.MIN_VALUE;
+            scroll.post(() -> scroll.scrollTo(0, Math.max(0, font.getTop() - keep)));
+        }
         label("종목을 길게 누르면 복사할 것");
         choice(Settings.flag(c, Settings.COPY_NAME) ? "name" : "code", new String[][]{{"code", "종목코드"}, {"name", "종목명"}},
                 v -> prefs().edit().putBoolean(Settings.COPY_NAME, v.equals("name")).apply());
