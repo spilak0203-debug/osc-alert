@@ -38,6 +38,9 @@ public class ListFragment extends Fragment implements Repo.Listener {
     private String query = "";
     private com.google.android.material.floatingactionbutton.FloatingActionButton top;
     private final Map<Signals.Kind, StockAdapter.Section> headers = new EnumMap<>(Signals.Kind.class);
+    /** A group to scroll to once it is on the list (the data may still be loading). */
+    private Signals.Kind pendingJump;
+    private LinearLayoutManager layout;
 
     static ListFragment create(boolean summary) {
         ListFragment f = new ListFragment();
@@ -57,6 +60,7 @@ public class ListFragment extends Fragment implements Repo.Listener {
         refresh = v.findViewById(R.id.refresh);
         list = v.findViewById(R.id.list);
         LinearLayoutManager lm = new LinearLayoutManager(requireContext());
+        layout = lm;
         list.setLayoutManager(lm);
         adapter = new StockAdapter();
         adapter.onJump(kind -> {
@@ -147,6 +151,23 @@ public class ListFragment extends Fragment implements Repo.Listener {
         if (isAdded()) render();
     }
 
+    void jumpTo(Signals.Kind kind) {
+        pendingJump = kind;
+        render();
+    }
+
+    private void applyJump() {
+        if (pendingJump == null || list == null) return;
+        int at = adapter.indexOf(headers.get(pendingJump));
+        if (at < 0) {
+            // Nothing in that group with the current filters: give up once the data is in.
+            if (!Repo.loading && !Repo.stocks.isEmpty()) pendingJump = null;
+            return;
+        }
+        pendingJump = null;
+        list.post(() -> layout.scrollToPositionWithOffset(at, 0));
+    }
+
     void lift() {
         if (top != null) top.animate().translationY(-MainActivity.buttonLift).setDuration(150).start();
     }
@@ -212,6 +233,7 @@ public class ListFragment extends Fragment implements Repo.Listener {
         status.setText(s);
         status.setVisibility(s.length() == 0 ? View.GONE : View.VISIBLE);
         adapter.submit(items);
+        applyJump();
     }
 
     /** Stocks without a value for the sort key go last; ties fall back to market cap. */

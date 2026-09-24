@@ -2,6 +2,7 @@ package kr.personal.oscalert;
 
 import android.content.BroadcastReceiver;
 import android.content.Context;
+import android.content.Intent;
 import android.content.SharedPreferences;
 import android.content.pm.PackageManager;
 import android.content.res.Configuration;
@@ -24,6 +25,8 @@ import java.util.Locale;
 
 public class MainActivity extends AppCompatActivity implements Repo.Listener {
     private static final String[] TAGS = {"summary", "stocks", "settings"};
+    /** Notification extra: the Signals.Kind whose group the dashboard should open at. */
+    static final String EXTRA_KIND = "kind";
     private static final String TAB = "tab";
 
     private BroadcastReceiver installResult;
@@ -90,7 +93,31 @@ public class MainActivity extends AppCompatActivity implements Repo.Listener {
         if (state == null) {
             askNotificationPermission();
             offerUpdate();
+            openKind(getIntent());
         }
+    }
+
+    @Override
+    protected void onNewIntent(Intent intent) {
+        super.onNewIntent(intent);
+        setIntent(intent);
+        openKind(intent);
+    }
+
+    /** From a notification: switch to the dashboard and scroll to that signal group. */
+    private void openKind(Intent intent) {
+        String name = intent == null ? null : intent.getStringExtra(EXTRA_KIND);
+        if (name == null) return;
+        intent.removeExtra(EXTRA_KIND);
+        Signals.Kind kind;
+        try {
+            kind = Signals.Kind.valueOf(name);
+        } catch (IllegalArgumentException e) {
+            return;
+        }
+        ((BottomNavigationView) findViewById(R.id.nav)).setSelectedItemId(R.id.tab_summary);
+        Fragment f = getSupportFragmentManager().findFragmentByTag(TAGS[0]);
+        if (f instanceof ListFragment) ((ListFragment) f).jumpTo(kind);
     }
 
     @Override

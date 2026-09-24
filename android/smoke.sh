@@ -111,6 +111,10 @@ shot 5d-settings-bottom
 tap_text "가+" && sleep 3
 tap_text "가+" && sleep 3
 shot 7-larger-font
+# A tapped notification opens the dashboard at its group.
+# Same intent a notification's tap sends.
+adb shell am start -n $PKG/.MainActivity -f 0x20000000 --es kind DEAD3 && sleep 6
+shot 8-notification-opened
 
 adb logcat -d > "$OUT/logcat.txt"
 if crashed; then echo "APP CRASHED"; exit 1; fi

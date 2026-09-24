@@ -84,11 +84,11 @@ final class Notifier {
         for (Map.Entry<Signals.Kind, List<Stock>> e : groups.entrySet()) {
             List<Stock> rows = e.getValue();
             if (rows.isEmpty()) continue;
-            show(c, 10 + e.getKey().ordinal(), prefix + e.getKey().label + " " + rows.size() + "종목 · " + day, lines(c, rows));
+            show(c, 10 + e.getKey().ordinal(), e.getKey(), prefix + e.getKey().label + " " + rows.size() + "종목 · " + day, lines(c, rows));
             posted++;
         }
         if (posted == 0 && Settings.flag(c, Settings.QUIET_DAYS)) {
-            show(c, 9, prefix + day + " 신호 없음", "설정한 조건에 맞는 종목이 없습니다");
+            show(c, 9, null, prefix + day + " 신호 없음", "설정한 조건에 맞는 종목이 없습니다");
             posted++;
         }
         return posted;
@@ -124,11 +124,11 @@ final class Notifier {
                 text = "예시종목  12,345원 (+1.23%)\n오늘은 이 조건에 맞는 종목이 없어 예시로 보여 드립니다";
                 n = 1;
             }
-            show(c, 100 + k.ordinal(), "[테스트] " + k.label + " " + n + "종목", text);
+            show(c, 100 + k.ordinal(), k, "[테스트] " + k.label + " " + n + "종목", text);
             shown++;
         }
         if (shown == 0) {
-            show(c, 99, "[테스트] 켜진 알림이 없습니다", "설정에서 받을 알림 종류를 켜세요 · " + describe(Settings.sound(c)));
+            show(c, 99, null, "[테스트] 켜진 알림이 없습니다", "설정에서 받을 알림 종류를 켜세요 · " + describe(Settings.sound(c)));
             shown = 1;
         }
         return shown;
@@ -147,9 +147,13 @@ final class Notifier {
         return String.format(Locale.KOREA, "%s  %,.0f원 (%+.2f%%)", s.name, s.price(), s.changePct());
     }
 
-    private static void show(Context c, int id, String title, String text) {
+    /** Tapping opens the dashboard at the notification's group (`kind`), or at the top when null. */
+    private static void show(Context c, int id, Signals.Kind kind, String title, String text) {
         if (!allowed(c)) return;
-        PendingIntent open = PendingIntent.getActivity(c, 0, new Intent(c, MainActivity.class),
+        Intent intent = new Intent(c, MainActivity.class).addFlags(Intent.FLAG_ACTIVITY_SINGLE_TOP);
+        if (kind != null) intent.putExtra(MainActivity.EXTRA_KIND, kind.name());
+        // One request code per notification, so each keeps its own extra.
+        PendingIntent open = PendingIntent.getActivity(c, id, intent,
                 PendingIntent.FLAG_UPDATE_CURRENT | PendingIntent.FLAG_IMMUTABLE);
         Notification n = new Notification.Builder(c, channel(c))
                 .setSmallIcon(R.drawable.ic_notify)
