@@ -1,9 +1,9 @@
 # osc-alert
 
 Scans every KOSPI and KOSDAQ stock after the close and notifies your phone when **three
-oscillators match** — all golden-cross (or all dead-cross) together. The Android app,
-"매매 시그널 알림", lets you tune the rule, shows a dashboard and charts for every stock, and
-updates itself from this repository's releases.
+oscillators match** — all golden-cross (or all dead-cross) together. The app, "매매 시그널 알림",
+runs on Android and Windows from one Flutter code base (`app/`). It lets you tune the rule, shows a
+dashboard and charts for every stock, and updates itself from this repository's releases.
 
 | | Golden confluence (buy) | Dead confluence (sell) |
 |---|---|---|
@@ -27,14 +27,15 @@ Weekdays 15:50 KST   GitHub Actions runs signal/scan.py
                      → market.json: the same, last 2 days only, for app 2.9 and older
                      → signals/latest.json: default-rule confluences (committed, with history)
                      Runs again at 16:40 in case the first run is late.
-Every 30 minutes     The app downloads market.json, evaluates the rule with your settings,
+Every 30 minutes     The app downloads market-v2.json, evaluates the rule with your settings,
                      and notifies when the signal date changes. Optional repeat at 08:00–09:00.
+                     (Android: a WorkManager job. Windows: the app keeps running in the tray.)
 ```
 
 Six days of indicator values are enough to evaluate any crossing, band condition and match window
-(0–4 days), so changing settings never needs a new scan. `signal/rule.py` is the reference; `Rule.java` and
-`Indicators.java` are ports, and JVM tests check them against fixtures produced by Python
-(`tests/make_java_fixtures.py`).
+(0–4 days), so changing settings never needs a new scan. `signal/rule.py` is the reference;
+`app/lib/core/rule.dart` and `indicators.dart` are ports, and Dart tests check them against fixtures
+produced by Python (`tests/make_fixtures.py`).
 
 If the scan runs before 15:40 KST, today's bar is dropped. On market holidays the signal date
 doesn't change, so nothing is sent.
@@ -51,23 +52,32 @@ doesn't change, so nothing is sent.
   dotted, band crossings are ringed. Pinch to zoom, drag sideways to scroll, tap or long-press to
   read a day, double tap to reset. Long press a row to copy its code (or name).
 - **설정 (Settings)**: which alerts to send, sound/vibration/both/silent, pre-market repeat, match
-  window, zone count, indicator rules, per-kind test notifications, font size, and update check.
+  window, zone count, indicator rules, per-kind test notifications, font size, update check and the
+  version history.
+- **Windows**: the same screens with a navigation rail on the left and the selected stock's charts
+  in a pane on the right. Mouse wheel zooms a chart, dragging scrolls it, hovering reads a day, a
+  double click resets; right click copies a stock's code. Closing the window keeps the app in the
+  tray (checking every 30 minutes); it can also start with Windows. Tapping a notification on either
+  platform opens the dashboard at that signal group.
 
 Prices shown live come from Naver quote endpoints; pull down to refresh.
 
 ## Setup
 
 1. **Workflow permissions**: Settings → Actions → General → Workflow permissions → *Read and write*.
-2. **Install the app**: download `osc-alert.apk` from the latest release and install it. Later
-   versions install from inside the app (allow "install unknown apps" for it once).
+2. **Install the app**: from the latest release, `osc-alert.apk` on Android (allow "install unknown
+   apps" once) or `osc-alert-setup.exe` on Windows (installs per user, no administrator rights).
+   Later versions install from inside the app.
 3. **First signal**: Actions → `daily-signal` → Run workflow, then pull to refresh in the app.
 
 If notifications arrive late or not at all, disable **battery optimization** for the app.
 
 ## Releases
 
-Every push to `main` that touches `android/` builds, tests and publishes release `v<run number>`
-with the APK. The app compares that number with its own version code. The `market-data`
+Every push to `main` that touches `app/` runs the tests, builds the APK and the Windows installer
+(Inno Setup) and publishes release `v<run number>` (version 2.<run number>) with both. The app
+compares that number with its own build number. The numbering continues the earlier Java app's,
+whose updater installs the Flutter build over it; settings and favourites carry over. The `market-data`
 pre-release holds the daily snapshot and never counts as the latest release.
 
 ## Running locally
@@ -79,12 +89,21 @@ python -m venv .venv
 .venv\Scripts\python -m unittest discover -s tests -v
 ```
 
-The Android build needs JDK 17 and the Android SDK; CI builds it with Gradle 8.9. The
-`android-smoke` workflow runs the app on an emulator and saves screenshots.
+The app needs Flutter (stable) — plus the Android SDK for the APK or Visual Studio's C++ tools for
+Windows:
+
+```bash
+cd app
+flutter test
+flutter run -d windows
+```
+
+On work branches `flutter-check` runs the tests, then a scripted tour of every screen on an Android
+emulator and on Windows (`--smoke=<dir>`) and uploads the screenshots.
 
 ## Signing key
 
-`android/app/release.keystore` signs every build with the **same key** so updates install over the
+`app/android/app/release.keystore` signs every build with the **same key** so updates install over the
 existing app (password `oscalert`). Since this repository is public, anyone can sign with it. To use
 your own key, add the repository secrets `ANDROID_KEYSTORE_B64` (base64 of the keystore) and
 `ANDROID_KEYSTORE_PASSWORD`; the workflow prefers them. Changing the key requires uninstalling and

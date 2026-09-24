@@ -1,8 +1,8 @@
 """Indicator-match rule evaluated from the last few days of indicator values.
 
-The Android app runs the same rule (`Rule.java`) on `market.json`, so users can change the
+The app runs the same rule (`app/lib/core/rule.dart`) on `market.json`, so users can change the
 settings (slow/fast stochastic, band conditions and levels, match window, 2-of-3) without a new
-scan. This file is the reference implementation; tests pin both it and the Java port.
+scan. This file is the reference implementation; tests pin both it and the Dart port.
 
 A snapshot is a dict with `k_fast`, `d_fast`, `k_slow`, `d_slow`, `rsi`, `rsi_sig`, `cci`.
 Missing values are NaN and make every comparison false, like pandas.

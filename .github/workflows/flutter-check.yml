@@ -1,0 +1,124 @@
+name: flutter-check
+
+# Work branches: analyzer and unit tests, then the in-app smoke tour on an Android emulator and
+# on Windows (screenshots of every screen), and a silent install of the Windows installer.
+on:
+  push:
+    branches-ignore: [main]
+    paths: ['app/**', '.github/workflows/flutter-check.yml']
+  workflow_dispatch:
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    defaults:
+      run:
+        working-directory: app
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+      - run: flutter pub get
+      - run: flutter analyze --no-fatal-infos
+      - run: flutter test
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: pubspec-lock
+          path: app/pubspec.lock
+
+  android:
+    needs: check
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+      - name: build the Flutter app
+        working-directory: app
+        run: flutter build apk --release --build-name 2.99999 --build-number 99999 --dart-define=REPO=${{ github.repository }}
+      - name: enable KVM
+        run: |
+          echo 'KERNEL=="kvm", GROUP="kvm", MODE="0666", OPTIONS+="static_node=kvm"' | sudo tee /etc/udev/rules.d/99-kvm4all.rules
+          sudo udevadm control --reload-rules
+          sudo udevadm trigger --name-match=kvm
+      - uses: reactivecircus/android-emulator-runner@v2
+        with:
+          api-level: 34
+          arch: x86_64
+          target: google_apis
+          profile: pixel_6
+          disable-animations: true
+          script: |
+            bash app/tool/android_smoke.sh app/build/app/outputs/flutter-apk/app-release.apk shots
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: android-shots
+          path: shots
+      - uses: actions/upload-artifact@v4
+        with:
+          name: flutter-apk
+          path: app/build/app/outputs/flutter-apk/app-release.apk
+
+  windows:
+    needs: check
+    runs-on: windows-latest
+    timeout-minutes: 40
+    defaults:
+      run:
+        working-directory: app
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+      - run: flutter build windows --release --build-name 2.99999 --build-number 99999 --dart-define=REPO=${{ github.repository }}
+      - name: smoke tour
+        shell: pwsh
+        run: |
+          $shots = Join-Path $PWD 'shots'
+          $p = Start-Process -FilePath build/windows/x64/runner/Release/oscalert.exe -ArgumentList "--smoke=$shots" -PassThru
+          if (-not $p.WaitForExit(600000)) { $p.Kill(); Write-Host 'timed out' }
+          Get-ChildItem $shots
+          if (Test-Path "$shots/error.txt") { Get-Content "$shots/error.txt"; exit 1 }
+          if (-not (Test-Path "$shots/done")) { exit 1 }
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: windows-shots
+          path: app/shots
+      - name: installer
+        shell: pwsh
+        run: |
+          $iscc = "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe"
+          if (-not (Test-Path $iscc)) { choco install innosetup -y --no-progress; }
+          & $iscc /DAppVersion=2.99999 "/DBuildDir=$PWD\build\windows\x64\runner\Release" windows\installer.iss
+          if ($LASTEXITCODE -ne 0) { exit 1 }
+      - name: install silently and start
+        shell: pwsh
+        run: |
+          # Not -Wait: that also waits for the app the installer starts.
+          $p = Start-Process build\installer\osc-alert-setup.exe -ArgumentList '/VERYSILENT','/SUPPRESSMSGBOXES' -PassThru
+          $p.WaitForExit(300000) | Out-Null
+          "exit $($p.ExitCode)"
+          Start-Sleep 15
+          Get-ChildItem "$env:LOCALAPPDATA\Programs\OscAlert" | Select-Object Name
+          Get-Process oscalert -ErrorAction SilentlyContinue | Select-Object Id, MainWindowTitle
+          if (-not (Get-Process oscalert -ErrorAction SilentlyContinue)) { exit 1 }
+          Stop-Process -Name oscalert -Force
+      - uses: actions/upload-artifact@v4
+        with:
+          name: windows-setup
+          path: app/build/installer/osc-alert-setup.exe

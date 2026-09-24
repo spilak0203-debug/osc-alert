@@ -1,4 +1,4 @@
-"""Builds the bundled Noto Sans KR fonts in android/app/src/main/res/font.
+"""Builds the bundled Noto Sans KR fonts in app/assets/fonts.
 
     pip install fonttools requests
     python tools/make_fonts.py
@@ -17,7 +17,7 @@ import requests
 from fontTools import subset
 from fontTools.ttLib import TTFont
 
-OUT = pathlib.Path(__file__).resolve().parents[1] / 'android/app/src/main/res/font'
+OUT = pathlib.Path(__file__).resolve().parents[1] / 'app/assets/fonts'
 CSS = 'https://fonts.googleapis.com/css2?family=Noto+Sans+KR:wght@400;500;700'
 NAMES = {'400': 'noto_sans_kr_regular', '500': 'noto_sans_kr_medium', '700': 'noto_sans_kr_bold'}
 

@@ -1,0 +1,44 @@
+name: oscalert
+description: "매매 시그널 알림: oscillator confluence alerts for KOSPI and KOSDAQ."
+publish_to: 'none'
+version: 2.0.0+1
+
+environment:
+  sdk: ^3.13.4
+
+dependencies:
+  flutter:
+    sdk: flutter
+  dynamic_color: ^1.7.0
+  flutter_local_notifications: any
+  fluttertoast: any
+  http: any
+  launch_at_startup: any
+  package_info_plus: any
+  path_provider: any
+  scrollable_positioned_list: any
+  shared_preferences: any
+  tray_manager: '>=0.2.3 <0.6.0'
+  url_launcher: any
+  window_manager: any
+  workmanager: any
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+  flutter_lints: ^6.0.0
+
+flutter:
+  uses-material-design: true
+  assets:
+    - assets/tray.ico
+    - assets/changelog.json
+  fonts:
+    - family: NotoSansKR
+      fonts:
+        - asset: assets/fonts/noto_sans_kr_regular.ttf
+          weight: 400
+        - asset: assets/fonts/noto_sans_kr_medium.ttf
+          weight: 500
+        - asset: assets/fonts/noto_sans_kr_bold.ttf
+          weight: 700

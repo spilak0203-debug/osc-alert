@@ -1,0 +1,339 @@
+import 'dart:convert';
+import 'dart:io';
+
+import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+
+import '../core/rule.dart' as rule;
+import '../core/settings.dart';
+import '../platform/app_update.dart';
+import '../platform/desktop.dart';
+import '../platform/notifier.dart';
+import 'toast.dart';
+
+/// Alert choices, indicator rules, font size and app updates. Every change saves immediately.
+class SettingsPage extends StatefulWidget {
+  const SettingsPage({super.key, this.controller});
+
+  final ScrollController? controller;
+
+  @override
+  State<SettingsPage> createState() => _SettingsPageState();
+}
+
+class _SettingsPageState extends State<SettingsPage> {
+  Release? _release;
+  bool _checking = false;
+
+  Settings get st => Settings.I;
+
+  @override
+  Widget build(BuildContext context) => ListenableBuilder(listenable: st, builder: (context, _) => _build(context));
+
+  Widget _build(BuildContext context) {
+    final rows = <Widget>[];
+    void section(String title) {
+      if (rows.isNotEmpty) rows.add(const Padding(padding: EdgeInsets.only(top: 16), child: Divider(height: 1)));
+      rows.add(Padding(
+        padding: const EdgeInsets.only(top: 16, bottom: 4),
+        child: Text(title, style: Theme.of(context).textTheme.titleMedium),
+      ));
+    }
+
+    void label(String text) => rows.add(Padding(
+          padding: const EdgeInsets.only(top: 8, bottom: 4),
+          child: Text(text, style: Theme.of(context).textTheme.bodyMedium),
+        ));
+
+    section('알림');
+    rows.add(_toggle(Settings.alert3, '3지표 일치 알림', '스토캐스틱·RSI·CCI가 모두 골든(또는 데드)크로스'));
+    rows.add(_toggle(Settings.alert2, '2지표 일치 알림', '셋 중 둘만 일치해도 따로 알림'));
+    rows.add(_toggle(Settings.alertZoneIn, '과매도·과매수 진입 알림', "아래 '구간 판단 지표 수' 이상이 구간에 새로 들어온 날"));
+    rows.add(_toggle(Settings.alertZoneOut, '과매도·과매수 탈출 알림', '구간에 있던 지표가 빠져나온 날'));
+    rows.add(_toggle(Settings.preMarket, '장 시작 전에도 알림', '다음 거래일 08시대에 같은 알림을 한 번 더'));
+    rows.add(_toggle(Settings.quietDays, '신호 없는 날에도 알림', '켜진 알림 종류에 맞는 종목이 없다는 알림'));
+
+    label('알림 방식');
+    rows.add(_choice(
+      st.sound,
+      Platform.isAndroid
+          ? const [['sound', '소리'], ['vibrate', '진동'], ['both', '소리+진동'], ['silent', '무음']]
+          : const [['both', '소리'], ['silent', '무음']],
+      (v) => st.setString(Settings.soundKey, v),
+    ));
+    rows.add(_button('테스트 알림 보내기 (켜진 종류별 예시)', true, () async {
+      if (!await Notifier.allowed()) {
+        Toaster.show('알림 권한을 허용해야 합니다', long: true);
+        await Notifier.askPermission();
+        return;
+      }
+      final n = await Notifier.test();
+      Toaster.show('테스트 알림 $n개를 보냈습니다');
+    }));
+
+    section('종목 필터');
+    label('대시보드·종목 탭·알림에 모두 적용됩니다');
+    label('시장');
+    rows.add(_choice(st.market, const [['all', '전체'], ['코스피', '코스피'], ['코스닥', '코스닥']],
+        (v) => st.setString(Settings.filterMarket, v)));
+    label('20일 평균 거래대금 최소');
+    rows.add(_choice(_amount(Settings.filterDv), const [['0', '없음'], ['1', '1억'], ['5', '5억'], ['10', '10억'], ['50', '50억']],
+        (v) => st.setNumber(Settings.filterDv, double.parse(v))));
+    label('시가총액 최소');
+    rows.add(_choice(_amount(Settings.filterCap),
+        const [['0', '없음'], ['500', '500억'], ['1000', '1천억'], ['5000', '5천억'], ['10000', '1조']],
+        (v) => st.setNumber(Settings.filterCap, double.parse(v))));
+
+    section('일치 판단');
+    label('허용 기간 · 신호일과 그 앞 며칠 안에 교차하면 같이 센다');
+    rows.add(_choice('${st.integer(Settings.windowKey)}',
+        [for (var d = 0; d <= rule.maxWindow; d++) ['$d', d == 0 ? '당일' : '$d일']],
+        (v) => st.setInteger(Settings.windowKey, int.parse(v))));
+    label('과매도·과매수 구간 판단 지표 수 · 이 개수 이상이 구간에 있을 때');
+    rows.add(_choice('${st.integer(Settings.zoneNeed)}', const [['1', '1개'], ['2', '2개'], ['3', '3개']],
+        (v) => st.setInteger(Settings.zoneNeed, int.parse(v))));
+
+    section('스토캐스틱');
+    rows.add(_choice(st.flag(Settings.stochSlow) ? 'slow' : 'fast', const [['slow', 'Slow 5-3-3'], ['fast', 'Fast 5-3']],
+        (v) => st.setFlag(Settings.stochSlow, v == 'slow')));
+    rows.add(_toggle(Settings.stochBand, '밴드 조건 사용', '끄면 %K·%D가 교차하기만 하면 신호. 켜면 과매도 아래·과매수 위에서 교차할 때만'));
+    rows.add(_numbers(Settings.stochLo, '과매도', Settings.stochHi, '과매수'));
+
+    section('RSI (14 · 시그널 9)');
+    rows.add(_toggle(Settings.rsiBand, '밴드 조건 사용', '끄면 RSI·시그널선이 교차하기만 하면 신호. 켜면 과매도 아래·과매수 위에서 교차할 때만'));
+    rows.add(_numbers(Settings.rsiLo, '과매도', Settings.rsiHi, '과매수'));
+
+    section('CCI (20)');
+    rows.add(_toggle(Settings.cciBand, '밴드 조건 사용', '켜면 ±기준선 돌파, 끄면 0선 돌파'));
+    rows.add(_numbers(Settings.cciLevel, '기준선 (±)', null, null));
+
+    section('화면');
+    label('테마');
+    rows.add(_choice(st.theme, const [['system', '기기 설정'], ['light', '라이트'], ['dark', '다크']],
+        (v) => st.setString(Settings.themeKey, v)));
+    label('글자 크기');
+    rows.add(Padding(
+      padding: const EdgeInsets.only(top: 8),
+      child: Row(children: [
+        OutlinedButton(onPressed: () => _changeFont(-1), child: const Text('가−')),
+        Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 16),
+          child: Text('${(st.fontScale * 100).round()}%', style: Theme.of(context).textTheme.bodyLarge),
+        ),
+        OutlinedButton(onPressed: () => _changeFont(1), child: const Text('가+')),
+      ]),
+    ));
+    label(Platform.isAndroid ? '종목을 길게 누르면 복사할 것' : '종목을 길게 누르거나 오른쪽 클릭하면 복사할 것');
+    rows.add(_choice(st.flag(Settings.copyName) ? 'name' : 'code', const [['code', '종목코드'], ['name', '종목명']],
+        (v) => st.setFlag(Settings.copyName, v == 'name')));
+
+    if (Desktop.supported) {
+      section('PC');
+      rows.add(_toggle(Settings.trayOnClose, '창을 닫으면 트레이로', '켜 두면 창을 닫아도 알림 확인을 계속합니다. 끝내려면 트레이 아이콘 메뉴의 종료'));
+      rows.add(_toggle(Settings.startWithWindows, '윈도우 시작 시 실행', '로그인하면 트레이에서 조용히 시작해 알림을 확인합니다',
+          onChanged: Desktop.setStartWithWindows));
+    }
+
+    section('앱');
+    final newer = AppUpdate.newer(_release);
+    label('현재 버전 ${AppUpdate.versionName}${newer ? ' · 새 버전 ${_release!.name}' : ''}');
+    rows.add(_button(newer ? '새 버전 설치' : '업데이트 확인', true, _checking ? null : () => _update(newer)));
+    rows.add(_button('버전 기록 보기', false, () => showChangelog(context)));
+
+    return ListView(
+      controller: widget.controller,
+      padding: const EdgeInsets.fromLTRB(16, 4, 16, 32),
+      children: [
+        Center(
+          child: ConstrainedBox(
+            constraints: const BoxConstraints(maxWidth: 720),
+            child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: rows),
+          ),
+        ),
+      ],
+    );
+  }
+
+  Future<void> _update(bool newer) async {
+    if (newer) {
+      await AppUpdate.install(_release!);
+      return;
+    }
+    setState(() => _checking = true);
+    try {
+      final r = await AppUpdate.latest();
+      if (!mounted) return;
+      setState(() => _release = r);
+      if (!AppUpdate.newer(r)) Toaster.show('최신 버전입니다');
+    } catch (e) {
+      Toaster.show('확인 실패: $e', long: true);
+    } finally {
+      if (mounted) setState(() => _checking = false);
+    }
+  }
+
+  void _changeFont(int direction) {
+    final now = st.fontScale;
+    var next = ((now + direction * Settings.fontStep) * 10).round() / 10;
+    next = next.clamp(Settings.fontMin, Settings.fontMax);
+    if (next == now) {
+      Toaster.show(direction > 0 ? '가장 큰 글자입니다' : '가장 작은 글자입니다');
+      return;
+    }
+    st.setNumber(Settings.fontScaleKey, next);
+    Toaster.show('글자 크기 ${(next * 100).round()}%');
+  }
+
+  String _amount(String key) => (st.prefs.getDouble(key) ?? 0).toStringAsFixed(0);
+
+  Widget _toggle(String key, String title, String hint, {Future<void> Function(bool)? onChanged}) {
+    final t = Theme.of(context).textTheme;
+    final on = st.flag(key);
+    void set(bool v) {
+      st.setFlag(key, v);
+      onChanged?.call(v);
+    }
+
+    return InkWell(
+      onTap: () => set(!on),
+      child: Padding(
+        padding: const EdgeInsets.symmetric(vertical: 6),
+        child: Row(children: [
+          Expanded(
+            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Text(title, style: t.bodyLarge),
+              Text(hint, style: t.bodySmall),
+            ]),
+          ),
+          Switch(value: on, onChanged: set),
+        ]),
+      ),
+    );
+  }
+
+  /// Segmented buttons; `save` receives the chosen option's value.
+  Widget _choice(String current, List<List<String>> options, ValueChanged<String> save) => Padding(
+        padding: const EdgeInsets.only(top: 4),
+        child: SizedBox(
+          width: double.infinity,
+          child: SegmentedButton<String>(
+            showSelectedIcon: false,
+            segments: [
+              for (final o in options)
+                ButtonSegment(value: o[0], label: Text(o[1], maxLines: 1, overflow: TextOverflow.fade, softWrap: false)),
+            ],
+            selected: {current},
+            onSelectionChanged: (v) => save(v.first),
+            style: const ButtonStyle(
+              padding: WidgetStatePropertyAll(EdgeInsets.symmetric(horizontal: 4)),
+              visualDensity: VisualDensity.standard,
+            ),
+          ),
+        ),
+      );
+
+  Widget _numbers(String keyA, String labelA, String? keyB, String? labelB) => Padding(
+        padding: const EdgeInsets.only(top: 4),
+        child: Row(children: [
+          Expanded(child: _NumberField(key: ValueKey(keyA), settingKey: keyA, hint: labelA)),
+          if (keyB != null) ...[
+            const SizedBox(width: 12),
+            Expanded(child: _NumberField(key: ValueKey(keyB), settingKey: keyB, hint: labelB!)),
+          ],
+        ]),
+      );
+
+  Widget _button(String text, bool filled, VoidCallback? onPressed) => Padding(
+        padding: const EdgeInsets.only(top: 8),
+        child: filled
+            ? FilledButton(onPressed: onPressed, child: Text(text))
+            : OutlinedButton(onPressed: onPressed, child: Text(text)),
+      );
+}
+
+class _NumberField extends StatefulWidget {
+  const _NumberField({super.key, required this.settingKey, required this.hint});
+
+  final String settingKey, hint;
+
+  @override
+  State<_NumberField> createState() => _NumberFieldState();
+}
+
+class _NumberFieldState extends State<_NumberField> {
+  late final TextEditingController _c =
+      TextEditingController(text: Settings.I.number(widget.settingKey).toStringAsFixed(0));
+  String? _error;
+
+  @override
+  void dispose() {
+    _c.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) => Padding(
+        padding: const EdgeInsets.only(top: 8),
+        child: TextField(
+          controller: _c,
+          keyboardType: const TextInputType.numberWithOptions(decimal: true),
+          decoration: InputDecoration(labelText: widget.hint, border: const OutlineInputBorder(), errorText: _error),
+          onChanged: (s) {
+            final v = double.tryParse(s);
+            if (v == null) {
+              setState(() => _error = '숫자');
+              return;
+            }
+            final cci = widget.settingKey == Settings.cciLevel;
+            final ok = cci ? v > 0 && v <= 500 : v >= 0 && v <= 100;
+            setState(() => _error = ok ? null : cci ? '1~500' : '0~100');
+            if (ok) Settings.I.setNumber(widget.settingKey, v);
+          },
+        ),
+      );
+}
+
+/// What changed in each version, newest first, from the bundled `assets/changelog.json`.
+Future<void> showChangelog(BuildContext context) async {
+  final entries = jsonDecode(await rootBundle.loadString('assets/changelog.json')) as List;
+  if (!context.mounted) return;
+  final t = Theme.of(context).textTheme;
+  final cs = Theme.of(context).colorScheme;
+  await showDialog<void>(
+    context: context,
+    builder: (context) => AlertDialog(
+      title: const Text('버전 기록'),
+      contentPadding: const EdgeInsets.fromLTRB(24, 16, 24, 0),
+      content: SizedBox(
+        width: 480,
+        child: ListView(shrinkWrap: true, children: [
+          for (final e in entries.cast<Map<String, dynamic>>()) ...[
+            Padding(
+              padding: const EdgeInsets.only(top: 12, bottom: 4),
+              child: Text.rich(TextSpan(children: [
+                TextSpan(
+                  text: e['version'] == null ? '이번 버전 ${AppUpdate.versionName}' : e['version'] as String,
+                  style: t.titleSmall,
+                ),
+                TextSpan(
+                  text: '  ${(e['date'] as String).replaceAll('-', '.')}',
+                  style: t.bodySmall!.copyWith(color: cs.onSurfaceVariant),
+                ),
+              ])),
+            ),
+            for (final item in (e['items'] as List).cast<String>())
+              Padding(
+                padding: const EdgeInsets.only(top: 2, left: 4),
+                child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                  Text('·  ', style: t.bodyMedium),
+                  Expanded(child: Text(item, style: t.bodyMedium)),
+                ]),
+              ),
+          ],
+          const SizedBox(height: 8),
+        ]),
+      ),
+      actions: [TextButton(onPressed: () => Navigator.of(context).pop(), child: const Text('닫기'))],
+    ),
+  );
+}
