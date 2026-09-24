@@ -1,4 +1,4 @@
-"""장 마감 뒤 코스피+코스닥 전 종목의 일봉을 받아 **오실레이터 3개 합치**를 찾는다.
+"""장 마감 뒤 코스피+코스닥 전 종목의 일봉을 받아 **오실레이터 3개 일치**를 찾는다.
 
     python signal/scan.py                 # 오늘 신호 → signals/latest.json
     python signal/scan.py --limit 50      # 시총 상위 50종목만 (시험용)
@@ -39,7 +39,7 @@ MARKET_URL = 'https://m.stock.naver.com/api/stocks/marketValue/{market}?page={pa
 PRICE_URL = ('https://api.finance.naver.com/siseJson.naver?symbol={symbol}&requestType=1'
              '&startTime={start}&endTime={end}&timeframe=day')
 HISTORY_DAYS = 300
-LIQUIDITY = 5e8          # 20일 평균 거래대금 하한 — 골든 합치(매수)에만 건다
+LIQUIDITY = 5e8          # 20일 평균 거래대금 하한 — 골든 일치(매수)에만 건다
 CLOSE_AT = (15, 40)      # 정규장 15:30 + 종가 단일가 정리 여유
 WORKERS = 8
 RETRIES = 3
@@ -187,7 +187,8 @@ SNAP_KEYS = ('k_fast', 'd_fast', 'k_slow', 'd_slow', 'rsi', 'rsi_sig', 'cci')
 
 
 def market_row(ticker, info, f, day):
-    """`market.json` 한 줄. 앱이 설정대로 합치를 다시 판정하도록 신호일과 그 전 봉의 지표를 싣는다.
+    """`market.json` 한 줄. 앱이 설정대로 일치를 다시 판정하도록 신호일까지 최근 `rl.HISTORY`일의
+    지표를 싣는다(오래된 날부터). 일치 허용 기간이 최대 4일이라 6일이면 된다.
 
     지표는 소수 넷째 자리까지 — 교차 판정에서 두 선이 거의 붙어 있을 때 반올림이 결과를
     뒤집지 않게 넉넉히 둔다. 신호일에 거래가 없던 종목도 목록에는 넣는다(지표는 비어 있음)."""
@@ -207,8 +208,9 @@ def market_row(ticker, info, f, day):
     dv20 = f.DollarVolume.rolling(20).mean().shift(1)
     row['dv20'] = num(dv20.iloc[at], 0) if at >= 0 else None
     if at >= 1:
+        lo = max(0, at - rl.HISTORY + 1)
         for key in SNAP_KEYS:
-            row[key] = [num(s[key].iloc[at - 1], 4), num(s[key].iloc[at], 4)]
+            row[key] = [num(v, 4) for v in s[key].iloc[lo:at + 1]]
     return row
 
 
@@ -268,8 +270,13 @@ def save(payload, market):
     (OUT / 'history').mkdir(exist_ok=True)
     (OUT / 'history' / f'{payload["asof"]}.json').write_text(text, encoding='utf-8')
     # 전 종목 지표는 커밋하지 않는다(매일 수백 KB가 기록에 쌓인다). 워크플로가 릴리스 자산으로 올린다.
-    (OUT / 'market.json').write_text(json.dumps(market, ensure_ascii=False, separators=(',', ':')),
-                                     encoding='utf-8')
+    # market-v2.json: 최근 6일치 (앱 2.10부터). market.json: 마지막 2일만 — 2.9 이하 앱은 배열의
+    # 앞 두 값을 전날·신호일로 읽으므로 이 형식을 그대로 둬야 한다.
+    dump = lambda m: json.dumps(m, ensure_ascii=False, separators=(',', ':'))
+    (OUT / 'market-v2.json').write_text(dump(market), encoding='utf-8')
+    legacy = dict(market, stocks=[{k: (v[-2:] if k in SNAP_KEYS else v) for k, v in r.items()}
+                                  for r in market['stocks']])
+    (OUT / 'market.json').write_text(dump(legacy), encoding='utf-8')
 
 
 def main():
@@ -283,8 +290,8 @@ def main():
     liquid = [r for r in payload['golden'] if r['liquid']]
     print(f"{payload['asof']} 종가 기준 · {payload['scanned']}/{payload['universe']}종목 "
           f"(실패 {payload['failed']})")
-    print(f"골든 합치 {len(payload['golden'])}건 (거래대금 5억↑ {len(liquid)}건) · "
-          f"데드 합치 {len(payload['dead'])}건")
+    print(f"골든 일치 {len(payload['golden'])}건 (거래대금 5억↑ {len(liquid)}건) · "
+          f"데드 일치 {len(payload['dead'])}건")
     for label, key in (('골든', 'golden'), ('데드', 'dead')):
         for r in payload[key][:30]:
             print(f"  [{label}] {r['ticker']} {r['name']:<12} {r['close']:>10,.0f}원  "

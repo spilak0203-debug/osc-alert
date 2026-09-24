@@ -10,7 +10,7 @@
         android:name=".OscApp"
         android:allowBackup="false"
         android:icon="@drawable/ic_app"
-        android:label="OSC 합치 알림"
+        android:label="매매 시그널 알림"
         android:supportsRtl="false"
         android:theme="@style/Theme.OscAlert">
 

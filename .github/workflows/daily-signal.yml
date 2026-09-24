@@ -37,7 +37,7 @@ jobs:
           gh release view market-data >/dev/null 2>&1 || \
             gh release create market-data --prerelease --title "Market data" \
               --notes "Daily indicator snapshot for the app. Replaced after every scan."
-          gh release upload market-data signals/market.json --clobber
+          gh release upload market-data signals/market.json signals/market-v2.json --clobber
       - name: commit signals
         run: |
           git config user.name "osc-alert bot"

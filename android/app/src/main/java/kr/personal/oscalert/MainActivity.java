@@ -2,6 +2,7 @@ package kr.personal.oscalert;
 
 import android.content.BroadcastReceiver;
 import android.content.Context;
+import android.content.SharedPreferences;
 import android.content.pm.PackageManager;
 import android.content.res.Configuration;
 import android.os.Build;
@@ -21,12 +22,15 @@ import com.google.android.material.snackbar.Snackbar;
 
 import java.util.Locale;
 
-public class MainActivity extends AppCompatActivity {
+public class MainActivity extends AppCompatActivity implements Repo.Listener {
     private static final String[] TAGS = {"summary", "stocks", "settings"};
     private static final String TAB = "tab";
 
     private BroadcastReceiver installResult;
+    private MaterialToolbar toolbar;
     private int tab;
+    /** Any settings change redraws every screen, hidden ones included. */
+    private final SharedPreferences.OnSharedPreferenceChangeListener settingsChanged = (p, key) -> Repo.changed();
 
     /** The user's font size multiplies the system one, so accessibility settings still count. */
     @Override
@@ -49,13 +53,18 @@ public class MainActivity extends AppCompatActivity {
         Notifier.channels(this);
         SignalWorker.schedule(this);
 
-        MaterialToolbar toolbar = findViewById(R.id.toolbar);
+        // No app title: the top bar says which close the signals are from and what the market is doing.
+        toolbar = findViewById(R.id.toolbar);
         toolbar.inflateMenu(R.menu.toolbar);
         toolbar.setOnMenuItemClickListener(item -> {
-            if (item.getItemId() == R.id.font_smaller) changeFont(-1);
-            else if (item.getItemId() == R.id.font_larger) changeFont(1);
+            if (item.getItemId() == R.id.refresh) {
+                Toast.makeText(this, "새로고침합니다", Toast.LENGTH_SHORT).show();
+                Repo.refresh(this, tab == 1);
+                Repo.changed();
+            }
             return true;
         });
+        updateTitle();
 
         FragmentManager fm = getSupportFragmentManager();
         if (state == null) {
@@ -82,6 +91,33 @@ public class MainActivity extends AppCompatActivity {
             askNotificationPermission();
             offerUpdate();
         }
+    }
+
+    @Override
+    protected void onStart() {
+        super.onStart();
+        Repo.listen(this);
+        Settings.prefs(this).registerOnSharedPreferenceChangeListener(settingsChanged);
+        updateTitle();
+    }
+
+    @Override
+    protected void onStop() {
+        Repo.unlisten(this);
+        Settings.prefs(this).unregisterOnSharedPreferenceChangeListener(settingsChanged);
+        super.onStop();
+    }
+
+    @Override
+    public void onChanged() {
+        updateTitle();
+    }
+
+    private void updateTitle() {
+        if (toolbar == null) return;
+        toolbar.setTitle(Repo.title());
+        String sub = Repo.subtitle();
+        toolbar.setSubtitle(sub.isEmpty() ? null : sub);
     }
 
     @Override
@@ -136,7 +172,7 @@ public class MainActivity extends AppCompatActivity {
                 if (!AppUpdate.newer(r)) return;
                 runOnUiThread(() -> {
                     if (isFinishing()) return;
-                    Snackbar.make(findViewById(R.id.content), "새 버전 " + r.name + "이 있습니다", Snackbar.LENGTH_INDEFINITE)
+                    Snackbar.make(findViewById(R.id.content), "새 버전(" + r.name + ")이 있습니다", Snackbar.LENGTH_INDEFINITE)
                             .setAnchorView(R.id.nav)
                             .setAction("설치", v -> AppUpdate.install(this, r))
                             .show();

@@ -31,6 +31,24 @@ class TwoDayRule(unittest.TestCase):
                 self.assertEqual(g, (bool(ev.stoch_gold.iloc[i]), bool(ev.rsi_gold.iloc[i]),
                                      bool(ev.cci_gold.iloc[i])))
 
+    def test_window_and_two_of_three_match_reference(self):
+        """`expected_window.json` holds the reference strategy's dates for windows 1–2 and 2-of-3."""
+        import json
+        expected = json.loads((FIX / 'expected_window.json').read_text(encoding='utf-8'))
+        for key, want in expected.items():
+            t, w, n = key.split('_')
+            w, need = int(w[1:]), int(n[1:])
+            s = ind.series(load(t))
+            recs = s.to_dict('records')
+            got = dict(golden=[], dead=[])
+            for i in range(1, len(recs)):
+                g, d = rl.match(recs[max(0, i - rl.HISTORY + 1):i + 1], {'window': w})
+                if sum(g) >= need:
+                    got['golden'].append(str(s.index[i].date()))
+                if sum(d) >= need:
+                    got['dead'].append(str(s.index[i].date()))
+            self.assertEqual(got, want, key)
+
     def test_loosening_only_adds_signals(self):
         loose = dict(stoch_band=False, rsi_band=False, cci_band=False)
         s = ind.series(load('086520')).to_dict('records')

@@ -1,17 +1,23 @@
-"""Confluence rule evaluated from two consecutive days of indicator values.
+"""Indicator-match rule evaluated from the last few days of indicator values.
 
-The Android app runs the same rule (`Rule.java`) on `market.json`, so users can change
-the settings (slow/fast stochastic, band conditions and levels, 2-of-3) without a new scan.
-This file is the reference implementation; tests pin both it and the Java port.
+The Android app runs the same rule (`Rule.java`) on `market.json`, so users can change the
+settings (slow/fast stochastic, band conditions and levels, match window, 2-of-3) without a new
+scan. This file is the reference implementation; tests pin both it and the Java port.
 
 A snapshot is a dict with `k_fast`, `d_fast`, `k_slow`, `d_slow`, `rsi`, `rsi_sig`, `cci`.
 Missing values are NaN and make every comparison false, like pandas.
+
+**Match window.** With window W, an indicator counts if it crossed on the signal day or in the
+W days before it, and at least one indicator must cross on the signal day itself — so a signal
+fires once, on the day the last indicator joins. W = 0 means all on the same day.
 """
 import math
 
 DEFAULTS = dict(stoch='slow', stoch_band=True, stoch_lo=20., stoch_hi=80.,
                 rsi_band=True, rsi_lo=30., rsi_hi=70.,
-                cci_band=True, cci_level=100.)
+                cci_band=True, cci_level=100., window=0)
+MAX_WINDOW = 4
+HISTORY = MAX_WINDOW + 2          # days of values the app needs: window + signal day + one before
 
 NAN = float('nan')
 
@@ -31,7 +37,7 @@ def _dn(a0, a1, b0, b1):
 
 
 def parts(prev, last, cfg=None):
-    """(golden parts, dead parts) — each a tuple of three booleans: stoch, rsi, cci."""
+    """Crossings between two consecutive days: (golden, dead), each (stoch, rsi, cci) booleans."""
     c = {**DEFAULTS, **(cfg or {})}
     kk, dd = ('k_slow', 'd_slow') if c['stoch'] == 'slow' else ('k_fast', 'd_fast')
     k0, k1, d0, d1 = _v(prev, kk), _v(last, kk), _v(prev, dd), _v(last, dd)
@@ -46,6 +52,21 @@ def parts(prev, last, cfg=None):
     cci_g = _up(c0, c1, -lv, -lv)
     cci_d = _dn(c0, c1, lv, lv)
     return (stoch_g, rsi_g, cci_g), (stoch_d, rsi_d, cci_d)
+
+
+def match(snaps, cfg=None):
+    """Signal on the last day of `snaps` (oldest first). Returns (golden, dead), each a tuple of
+    three booleans: did that indicator cross within the window. A side with no crossing on the
+    last day returns all False — the signal belongs to the day the last indicator joined."""
+    c = {**DEFAULTS, **(cfg or {})}
+    w = int(c['window'])
+    days = [parts(snaps[i - 1], snaps[i], c) for i in range(max(1, len(snaps) - 1 - w), len(snaps))]
+    out = []
+    for side in (0, 1):
+        today = days[-1][side]
+        wide = tuple(any(d[side][j] for d in days) for j in range(3))
+        out.append(wide if any(today) else (False,) * 3)
+    return tuple(out)
 
 
 def zones(snap, cfg=None):

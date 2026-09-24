@@ -61,6 +61,12 @@ adb shell am broadcast -a android.intent.action.CLOSE_SYSTEM_DIALOGS >/dev/null 
 adb shell am start -n $PKG/.MainActivity
 sleep 20
 shot 1-summary
+adb shell input swipe 540 1800 540 700 600 && sleep 2
+shot 1b-summary-lower
+tap_text "제이앤티씨" && sleep 12
+shot 1c-summary-expanded
+adb shell input swipe 540 1800 540 1000 800 && sleep 2
+shot 1d-summary-oscillators
 
 tap_text "종목" && sleep 25
 shot 2-stocks

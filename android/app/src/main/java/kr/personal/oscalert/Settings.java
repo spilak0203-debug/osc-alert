@@ -8,16 +8,20 @@ final class Settings {
     private Settings() {}
 
     // Alerts
-    static final String ALERT_3 = "alert3", ALERT_2 = "alert2", ALERT_ZONE = "alertZone";
+    static final String ALERT_3 = "alert3", ALERT_2 = "alert2";
+    static final String ALERT_ZONE_IN = "alertZoneIn", ALERT_ZONE_OUT = "alertZoneOut";
     static final String PRE_MARKET = "preMarket", LIQUID_ONLY = "liquidOnly", QUIET_DAYS = "quietDays";
-    static final String SOUND = "sound";                     // sound | vibrate | both
-    // Indicators
+    static final String SOUND = "sound";                     // sound | vibrate | both | silent
+    // Rule
+    static final String WINDOW = "window";                   // 0..Rule.MAX_WINDOW days
+    static final String ZONE_NEED = "zoneNeed";              // 1..3 indicators
     static final String STOCH_SLOW = "stochSlow";
     static final String STOCH_BAND = "stochBand", STOCH_LO = "stochLo", STOCH_HI = "stochHi";
     static final String RSI_BAND = "rsiBand", RSI_LO = "rsiLo", RSI_HI = "rsiHi";
     static final String CCI_BAND = "cciBand", CCI_LEVEL = "cciLevel";
     // Display
     static final String FONT_SCALE = "fontScale";
+    static final String COPY_NAME = "copyName";              // long press copies the name instead of the code
     static final String SHOW_MA = "showMa", SHOW_STOCH = "showStoch", SHOW_RSI = "showRsi", SHOW_CCI = "showCci";
 
     static final float FONT_MIN = 0.7f, FONT_MAX = 2.0f, FONT_STEP = 0.1f;
@@ -32,8 +36,10 @@ final class Settings {
 
     static boolean defaultFlag(String key) {
         switch (key) {
-            case ALERT_2: case ALERT_ZONE: case PRE_MARKET: case QUIET_DAYS: return false;
-            default: return true;
+            case ALERT_2: case ALERT_ZONE_IN: case ALERT_ZONE_OUT: case PRE_MARKET: case QUIET_DAYS: case COPY_NAME:
+                return false;
+            default:
+                return true;
         }
     }
 
@@ -50,6 +56,11 @@ final class Settings {
             case CCI_LEVEL: return 100;
             default: return 0;
         }
+    }
+
+    static int integer(Context c, String key) {
+        int fallback = key.equals(ZONE_NEED) ? 2 : 0;
+        return prefs(c).getInt(key, fallback);
     }
 
     static String sound(Context c) {
@@ -71,6 +82,7 @@ final class Settings {
         r.rsiLo = number(c, RSI_LO);
         r.rsiHi = number(c, RSI_HI);
         r.cciLevel = number(c, CCI_LEVEL);
+        r.window = Math.max(0, Math.min(Rule.MAX_WINDOW, integer(c, WINDOW)));
         return r;
     }
 }

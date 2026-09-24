@@ -21,6 +21,11 @@ final class Bars {
     private static final LruCache<String, Bars> CACHE = new LruCache<>(30);
     private static final long DAY = 86_400_000L;
 
+    /** Forget every stock's bars so the next expand loads today's. */
+    static void clear() {
+        CACHE.evictAll();
+    }
+
     static Bars cached(String ticker) {
         return CACHE.get(ticker);
     }

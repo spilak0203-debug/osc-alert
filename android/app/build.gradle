@@ -17,7 +17,7 @@ android {
         versionCode buildNumber
         versionName "2.${buildNumber}"
         buildConfigField 'String', 'REPO', "\"${repo}\""
-        buildConfigField 'String', 'MARKET_URL', "\"https://github.com/${repo}/releases/download/market-data/market.json\""
+        buildConfigField 'String', 'MARKET_URL', "\"https://github.com/${repo}/releases/download/market-data/market-v2.json\""
     }
 
     buildFeatures {

@@ -8,3 +8,4 @@ android/local.properties
 .idea/
 *.apk
 signals/market.json
+signals/market-v2.json

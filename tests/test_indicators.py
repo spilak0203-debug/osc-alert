@@ -1,4 +1,4 @@
-"""합치 판정이 기준 구현과 같은 날짜를 내는가.
+"""일치 판정이 기준 구현과 같은 날짜를 내는가.
 
 `fixtures/expected.json`은 기준 구현으로 같은 일봉을 돌려 얻은 날짜다. 네트워크를 쓰지 않는다.
 """
@@ -31,7 +31,7 @@ class MatchesOriginal(unittest.TestCase):
         f = pd.read_csv(FIX / '086520.csv', index_col=0, parse_dates=True)
         ev = ind.evaluate(f)
         self.assertTrue((ev.golden == (ev.stoch_gold & ev.rsi_gold & ev.cci_gold)).all())
-        # 하나만 켜진 날이 합치보다 훨씬 많아야 정상이다
+        # 하나만 켜진 날이 일치보다 훨씬 많아야 정상이다
         self.assertGreater(int(ev.stoch_gold.sum()), int(ev.golden.sum()))
 
 

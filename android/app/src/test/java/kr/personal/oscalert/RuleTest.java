@@ -40,6 +40,7 @@ public class RuleTest {
         c.stochLo = o.optDouble("stoch_lo", 20); c.stochHi = o.optDouble("stoch_hi", 80);
         c.rsiLo = o.optDouble("rsi_lo", 30); c.rsiHi = o.optDouble("rsi_hi", 70);
         c.cciLevel = o.optDouble("cci_level", 100);
+        c.window = o.optInt("window", 0);
         return c;
     }
 
@@ -58,13 +59,16 @@ public class RuleTest {
         for (int i = 0; i < cases.length(); i++) {
             JSONObject k = cases.getJSONObject(i);
             Rule.Config c = config(configs.getJSONObject(k.getInt("config")));
-            Rule.Snap prev = snap(k.getJSONObject("prev")), last = snap(k.getJSONObject("last"));
+            JSONArray raw = k.getJSONArray("seq");
+            Rule.Snap[] seq = new Rule.Snap[raw.length()];
+            for (int s = 0; s < seq.length; s++) seq[s] = snap(raw.getJSONObject(s));
             String where = "case " + i;
-            assertArrayEquals(where, bools(k.getJSONArray("golden")), Rule.golden(prev, last, c));
-            assertArrayEquals(where, bools(k.getJSONArray("dead")), Rule.dead(prev, last, c));
+            boolean[][] m = Rule.match(seq, c);
+            assertArrayEquals(where, bools(k.getJSONArray("golden")), m[0]);
+            assertArrayEquals(where, bools(k.getJSONArray("dead")), m[1]);
             JSONArray z = k.getJSONArray("zones");
-            assertArrayEquals(where, new int[]{z.getInt(0), z.getInt(1)}, Rule.zones(last, c));
-            fired += Rule.count(Rule.golden(prev, last, c)) == 3 ? 1 : 0;
+            assertArrayEquals(where, new int[]{z.getInt(0), z.getInt(1)}, Rule.zones(seq[seq.length - 1], c));
+            fired += Rule.count(m[0]) == 3 ? 1 : 0;
         }
         assertTrue("fixture should contain full confluences", fired > 0);
     }

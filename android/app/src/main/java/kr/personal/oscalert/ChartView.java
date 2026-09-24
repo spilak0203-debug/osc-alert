@@ -6,7 +6,9 @@ import android.graphics.DashPathEffect;
 import android.graphics.Paint;
 import android.graphics.Path;
 import android.util.TypedValue;
+import android.view.GestureDetector;
 import android.view.MotionEvent;
+import android.view.ScaleGestureDetector;
 import android.view.View;
 import android.view.ViewConfiguration;
 
@@ -24,14 +26,27 @@ import java.util.Locale;
 final class ChartView extends View {
     enum Type { CANDLE, STOCH, RSI, CCI }
 
-    static final int WINDOW = 120;
+    static final int WINDOW = 120, MIN_BARS = 20;
+
+    /** Zoom and scroll, shared by every panel of one stock so they move together. */
+    static final class Viewport {
+        int visible = WINDOW;              // bars on screen
+        int end = Integer.MAX_VALUE;       // one past the last bar on screen; MAX_VALUE = pinned to the latest
+    }
 
     private final Type type;
     private Bars bars;
     private Rule.Config cfg = new Rule.Config();
-    private boolean showMa = true, twoOfThree;
+    private boolean showMa = true, showSignals = true, compact;
+    /** Per bar: indicators matched on that signal day (0, 2 or 3) and where the matching span starts. */
+    private int[] goldLevel, deadLevel, goldStart, deadStart;
+    /** Per bar: which indicators crossed that day (stoch, rsi, cci), under the current rule. */
+    private boolean[][] goldPart, deadPart;
     private List<ChartView> group;
     private int selected = -1;
+    private Viewport vp = new Viewport();
+    private final ScaleGestureDetector scaler;
+    private final GestureDetector gestures;
 
     private final Paint line = new Paint(Paint.ANTI_ALIAS_FLAG), fill = new Paint(Paint.ANTI_ALIAS_FLAG);
     private final Paint text = new Paint(Paint.ANTI_ALIAS_FLAG), dash = new Paint(Paint.ANTI_ALIAS_FLAG);
@@ -57,21 +72,112 @@ final class ChartView extends View {
         dash.setStyle(Paint.Style.STROKE);
         dash.setStrokeWidth(dp(1));
         dash.setPathEffect(new DashPathEffect(new float[]{dp(4), dp(3)}, 0));
+        scaler = new ScaleGestureDetector(c, new ScaleGestureDetector.SimpleOnScaleGestureListener() {
+            @Override
+            public boolean onScaleBegin(ScaleGestureDetector d) {
+                scaling = true;
+                getParent().requestDisallowInterceptTouchEvent(true);
+                return bars != null;
+            }
+
+            @Override
+            public boolean onScale(ScaleGestureDetector d) {
+                zoom(d.getScaleFactor(), d.getFocusX());
+                return true;
+            }
+        });
+        gestures = new GestureDetector(c, new GestureDetector.SimpleOnGestureListener() {
+            @Override
+            public boolean onDown(MotionEvent e) {
+                return true;
+            }
+
+            @Override
+            public boolean onSingleTapConfirmed(MotionEvent e) {
+                selectAt(e.getX());
+                return true;
+            }
+
+            @Override
+            public boolean onDoubleTap(MotionEvent e) {
+                vp.visible = WINDOW;
+                vp.end = Integer.MAX_VALUE;
+                if (group != null) for (ChartView v : group) v.select(-1); else select(-1);
+                return true;
+            }
+
+            @Override
+            public void onLongPress(MotionEvent e) {
+                if (scaling || panning) return;
+                crosshair = true;
+                getParent().requestDisallowInterceptTouchEvent(true);
+                selectAt(e.getX());
+            }
+        });
     }
 
-    void bind(Bars bars, Rule.Config cfg, boolean showMa, boolean twoOfThree, List<ChartView> group) {
+    void setViewport(Viewport v) {
+        vp = v;
+        invalidate();
+    }
+
+    void bind(Bars bars, Rule.Config cfg, boolean showMa, boolean showSignals, List<ChartView> group) {
         this.bars = bars;
         this.cfg = cfg;
         this.showMa = showMa;
-        this.twoOfThree = twoOfThree;
+        this.showSignals = showSignals;
         this.group = group;
         selected = -1;
+        if (bars != null && showSignals) annotate();
         invalidate();
+    }
+
+    /** A shorter candle panel for the index cards. */
+    void setCompact(boolean compact) {
+        this.compact = compact;
+        requestLayout();
+    }
+
+    /** Runs the rule over every day so the chart shows exactly what the alerts would have said. */
+    private void annotate() {
+        int n = bars.size();
+        goldLevel = new int[n]; deadLevel = new int[n]; goldStart = new int[n]; deadStart = new int[n];
+        goldPart = new boolean[n][3]; deadPart = new boolean[n][3];
+        Indicators.Series s = bars.series;
+        for (int i = 1; i < n; i++) {
+            goldPart[i] = Rule.golden(s.snap(i - 1), s.snap(i), cfg);
+            deadPart[i] = Rule.dead(s.snap(i - 1), s.snap(i), cfg);
+        }
+        for (int i = 1; i < n; i++) {
+            int from = Math.max(0, i - Rule.HISTORY + 1);
+            Rule.Snap[] seq = new Rule.Snap[i - from + 1];
+            for (int j = from; j <= i; j++) seq[j - from] = s.snap(j);
+            boolean[][] m = Rule.match(seq, cfg);
+            goldLevel[i] = level(m[0]);
+            deadLevel[i] = level(m[1]);
+            goldStart[i] = spanStart(i, m[0], goldPart);
+            deadStart[i] = spanStart(i, m[1], deadPart);
+        }
+    }
+
+    private static int level(boolean[] m) {
+        int c = Rule.count(m);
+        return c >= 2 ? c : 0;
+    }
+
+    /** First day inside the window on which one of the matched indicators crossed. */
+    private int spanStart(int i, boolean[] matched, boolean[][] parts) {
+        int start = i;
+        for (int j = Math.max(1, i - cfg.window); j <= i; j++) {
+            for (int p = 0; p < 3; p++) if (matched[p] && parts[j][p]) start = Math.min(start, j);
+        }
+        return start;
     }
 
     @Override
     protected void onMeasure(int w, int h) {
-        int height = (int) dp(type == Type.CANDLE ? 230 : 110) + (int) sp(type == Type.CANDLE ? 30 : 16);
+        int body = type == Type.CANDLE ? (compact ? 150 : 230) : 110;
+        int height = (int) dp(body) + (int) sp(type == Type.CANDLE ? 30 : 16);
         setMeasuredDimension(MeasureSpec.getSize(w), height);
     }
 
@@ -85,7 +191,12 @@ final class ChartView extends View {
 
     // ---- geometry -------------------------------------------------------------------------
 
-    private int from() { return Math.max(0, bars.size() - WINDOW); }
+    private int shown() { return Math.max(2, Math.min(vp.visible, bars.size())); }
+
+    /** One past the last bar on screen. */
+    private int to() { return Math.max(shown(), Math.min(bars.size(), vp.end)); }
+
+    private int from() { return to() - shown(); }
 
     private float left() { return dp(4); }
 
@@ -95,7 +206,7 @@ final class ChartView extends View {
 
     private float bottom() { return getHeight() - (type == Type.CANDLE ? sp(16) : dp(4)); }
 
-    private float step() { return (right() - left()) / Math.max(1, bars.size() - from()); }
+    private float step() { return (right() - left()) / Math.max(1, to() - from()); }
 
     private float x(int i) { return left() + (i - from() + 0.5f) * step(); }
 
@@ -105,43 +216,80 @@ final class ChartView extends View {
 
     // ---- touch ----------------------------------------------------------------------------
 
-    private float downX, downY;
-    private boolean dragging;
+    private float downX, downY, panX;
+    private int panEnd;
+    private boolean panning, crosshair, scaling;
 
     /**
-     * A tap or a sideways drag moves the crosshair. A vertical drag is left to the list, so the
+     * Two fingers zoom; a sideways drag scrolls through time; a tap or a long press then drag
+     * shows a day's values; a double tap resets. A vertical drag is left to the list, so the
      * page still scrolls when the finger starts on a chart.
      */
     @Override
     public boolean onTouchEvent(MotionEvent e) {
-        if (bars == null || bars.size() == 0) return false;
+        if (bars == null || bars.size() < 2) return false;
+        scaler.onTouchEvent(e);
+        gestures.onTouchEvent(e);
         int slop = ViewConfiguration.get(getContext()).getScaledTouchSlop();
         switch (e.getActionMasked()) {
             case MotionEvent.ACTION_DOWN:
                 downX = e.getX();
                 downY = e.getY();
-                dragging = false;
+                panning = crosshair = scaling = false;
+                return true;
+            case MotionEvent.ACTION_POINTER_DOWN:
+                scaling = true;
+                getParent().requestDisallowInterceptTouchEvent(true);
                 return true;
             case MotionEvent.ACTION_MOVE:
-                float dx = Math.abs(e.getX() - downX), dy = Math.abs(e.getY() - downY);
-                if (!dragging && dx > slop && dx > dy) {
-                    dragging = true;
-                    getParent().requestDisallowInterceptTouchEvent(true);
+                if (scaling || e.getPointerCount() > 1) return true;
+                if (crosshair) {
+                    selectAt(e.getX());
+                    return true;
                 }
-                if (dragging) selectAt(e.getX());
+                float dx = Math.abs(e.getX() - downX), dy = Math.abs(e.getY() - downY);
+                if (!panning && dx > slop && dx > dy) {
+                    panning = true;
+                    getParent().requestDisallowInterceptTouchEvent(true);
+                    panX = e.getX();
+                    panEnd = to();
+                }
+                if (panning) {
+                    vp.end = clampEnd(panEnd + Math.round((panX - e.getX()) / step()));
+                    redraw();
+                }
                 return true;
             case MotionEvent.ACTION_UP:
-                if (!dragging && Math.abs(e.getX() - downX) <= slop && Math.abs(e.getY() - downY) <= slop) {
-                    selectAt(e.getX());
-                    performClick();
-                }
-                // fall through
             case MotionEvent.ACTION_CANCEL:
-                dragging = false;
                 getParent().requestDisallowInterceptTouchEvent(false);
+                panning = crosshair = false;
                 return true;
         }
         return super.onTouchEvent(e);
+    }
+
+    /** Keeps the day under the fingers in place while the number of bars on screen changes. */
+    private void zoom(float factor, float focusX) {
+        if (bars == null) return;
+        int before = shown();
+        int after = Math.max(Math.min(MIN_BARS, bars.size()), Math.min(bars.size(), Math.round(before / factor)));
+        if (after == before) return;
+        float ratio = Math.max(0, Math.min(1, (focusX - left()) / (right() - left())));
+        double focus = from() + ratio * before;
+        vp.visible = after;
+        vp.end = clampEnd((int) Math.round(focus - ratio * after) + after);
+        redraw();
+    }
+
+    /** Past the latest bar means "follow the latest". */
+    private int clampEnd(int end) {
+        if (end >= bars.size()) return Integer.MAX_VALUE;
+        return Math.max(shown(), end);
+    }
+
+    private void redraw() {
+        if (group != null) for (ChartView v : group) v.invalidate();
+        else invalidate();
     }
 
     @Override
@@ -151,7 +299,7 @@ final class ChartView extends View {
 
     private void selectAt(float px) {
         int i = from() + (int) ((px - left()) / step());
-        i = Math.max(from(), Math.min(bars.size() - 1, i));
+        i = Math.max(from(), Math.min(to() - 1, i));
         if (group != null) for (ChartView v : group) v.select(i);
         else select(i);
     }
@@ -176,8 +324,8 @@ final class ChartView extends View {
             case RSI: drawRsi(c); break;
             default: drawCci(c);
         }
-        int at = selected >= 0 ? selected : bars.size() - 1;
-        if (selected >= 0) {
+        int at = at();
+        if (selected >= from() && selected < to()) {
             line.setColor(muted);
             line.setStrokeWidth(dp(1));
             c.drawLine(x(at), top(), x(at), bottom(), line);
@@ -185,11 +333,11 @@ final class ChartView extends View {
     }
 
     private int at() {
-        return selected >= 0 ? selected : bars.size() - 1;
+        return selected >= from() && selected < to() ? selected : to() - 1;
     }
 
     private void drawCandles(Canvas c) {
-        int a = from(), n = bars.size();
+        int a = from(), n = to();
         double lo = Double.MAX_VALUE, hi = -Double.MAX_VALUE;
         for (int i = a; i < n; i++) {
             lo = Math.min(lo, bars.low[i]);
@@ -203,6 +351,7 @@ final class ChartView extends View {
         hi += pad;
         gridAndAxis(c, lo, hi, 0, false);
         priceTicks(c, lo, hi);
+        spans(c);
 
         float w = Math.max(1f, step() * 0.62f);
         for (int i = a; i < n; i++) {
@@ -220,7 +369,7 @@ final class ChartView extends View {
         if (showMa) {
             for (int m = 0; m < bars.series.ma.length; m++) polyline(c, bars.series.ma[m], lo, hi, maColors[m], dp(1.3f));
         }
-        markers(c, lo, hi);
+        if (showSignals) markers(c, lo, hi);
 
         // Header: selected day, then moving-average legend.
         int i = at();
@@ -252,22 +401,69 @@ final class ChartView extends View {
         return d.substring(2, 4) + "." + d.substring(4, 6) + "." + d.substring(6);
     }
 
-    /** ▲ under golden confluences and ▼ over dead ones; hollow for 2 of 3 when that alert is on. */
+    /** ▲ under golden matches and ▼ over dead ones: solid for 3 indicators, hollow for 2. */
     private void markers(Canvas c, double lo, double hi) {
-        Indicators.Series s = bars.series;
         float size = dp(5);
-        for (int i = Math.max(1, from()); i < bars.size(); i++) {
-            Rule.Snap p = s.snap(i - 1), l = s.snap(i);
-            int g = Rule.count(Rule.golden(p, l, cfg)), d = Rule.count(Rule.dead(p, l, cfg));
-            if (g == 3 || (twoOfThree && g == 2)) {
-                float yy = y(bars.low[i], lo, hi) + dp(3);
-                triangle(c, x(i), yy, size, true, up, g == 3);
+        for (int i = Math.max(1, from()); i < to(); i++) {
+            if (goldLevel[i] >= 2) triangle(c, x(i), y(bars.low[i], lo, hi) + dp(3), size, true, up, goldLevel[i] == 3);
+            if (deadLevel[i] >= 2) triangle(c, x(i), y(bars.high[i], lo, hi) - dp(3), size, false, down, deadLevel[i] == 3);
+        }
+    }
+
+    /** Shaded columns from the first matching crossing to the signal day; darker for 3 indicators. */
+    private void spans(Canvas c) {
+        if (!showSignals || goldLevel == null) return;
+        fill.setStyle(Paint.Style.FILL);
+        float half = step() / 2;
+        for (int i = Math.max(1, from()); i < to(); i++) {
+            if (goldLevel[i] >= 2) {
+                fill.setColor(withAlpha(up, goldLevel[i] == 3 ? 0x40 : 0x1C));
+                c.drawRect(x(Math.max(from(), goldStart[i])) - half, top(), x(i) + half, bottom(), fill);
             }
-            if (d == 3 || (twoOfThree && d == 2)) {
-                float yy = y(bars.high[i], lo, hi) - dp(3);
-                triangle(c, x(i), yy, size, false, down, d == 3);
+            if (deadLevel[i] >= 2) {
+                fill.setColor(withAlpha(down, deadLevel[i] == 3 ? 0x40 : 0x1C));
+                c.drawRect(x(Math.max(from(), deadStart[i])) - half, top(), x(i) + half, bottom(), fill);
             }
         }
+    }
+
+    /**
+     * Dots on the oscillator's line: filled red for its golden cross, filled blue for its dead
+     * cross (as the rule defines them), and hollow rings where the line crosses a band level —
+     * red for the oversold level, blue for the overbought one.
+     */
+    private void crossings(Canvas c, int part, double[] v, double lo, double hi, double low, double high) {
+        if (!showSignals || goldPart == null) return;
+        float r = dp(3.5f);
+        for (int i = Math.max(1, from()); i < to(); i++) {
+            if (Double.isNaN(v[i]) || Double.isNaN(v[i - 1])) continue;
+            float xx = x(i), yy = Math.max(top(), Math.min(bottom(), y(v[i], lo, hi)));
+            boolean crossLow = (v[i - 1] < low) != (v[i] < low);
+            boolean crossHigh = (v[i - 1] > high) != (v[i] > high);
+            fill.setStrokeWidth(dp(1f));
+            fill.setStyle(Paint.Style.STROKE);
+            if (crossLow) {
+                fill.setColor(up);
+                c.drawCircle(xx, y(low, lo, hi), r - dp(1), fill);
+            }
+            if (crossHigh) {
+                fill.setColor(down);
+                c.drawCircle(xx, y(high, lo, hi), r - dp(1), fill);
+            }
+            fill.setStyle(Paint.Style.FILL);
+            if (goldPart[i][part]) {
+                fill.setColor(up);
+                c.drawCircle(xx, yy, r, fill);
+            }
+            if (deadPart[i][part]) {
+                fill.setColor(down);
+                c.drawCircle(xx, yy, r, fill);
+            }
+        }
+    }
+
+    private static int withAlpha(int color, int alpha) {
+        return (color & 0x00FFFFFF) | (alpha << 24);
     }
 
     private void triangle(Canvas c, float cx, float tipY, float size, boolean pointUp, int color, boolean solid) {
@@ -287,9 +483,11 @@ final class ChartView extends View {
         double[] k = cfg.slow ? bars.series.kSlow : bars.series.kFast;
         double[] d = cfg.slow ? bars.series.dSlow : bars.series.dFast;
         bands(c, 0, 100, cfg.stochLo, cfg.stochHi, cfg.stochBand);
+        spans(c);
         gridAndAxis(c, 0, 100, 0, false);
         polyline(c, k, 0, 100, mainLine, dp(1.5f));
         polyline(c, d, 0, 100, sigLine, dp(1.2f));
+        crossings(c, Rule.STOCH, k, 0, 100, cfg.stochLo, cfg.stochHi);
         int i = at();
         header(c, (cfg.slow ? "Slow" : "Fast") + " 스토캐스틱 5-3-3",
                 "%K " + fmt(k[i]), mainLine, "%D " + fmt(d[i]), sigLine);
@@ -297,9 +495,11 @@ final class ChartView extends View {
 
     private void drawRsi(Canvas c) {
         bands(c, 0, 100, cfg.rsiLo, cfg.rsiHi, cfg.rsiBand);
+        spans(c);
         gridAndAxis(c, 0, 100, 0, false);
         polyline(c, bars.series.rsi, 0, 100, mainLine, dp(1.5f));
         polyline(c, bars.series.rsiSig, 0, 100, sigLine, dp(1.2f));
+        crossings(c, Rule.RSI, bars.series.rsi, 0, 100, cfg.rsiLo, cfg.rsiHi);
         int i = at();
         header(c, "RSI 14 · 시그널 9", "RSI " + fmt(bars.series.rsi[i]), mainLine,
                 "시그널 " + fmt(bars.series.rsiSig[i]), sigLine);
@@ -308,12 +508,14 @@ final class ChartView extends View {
     private void drawCci(Canvas c) {
         double[] v = bars.series.cci;
         double level = cfg.cciLevel, m = level * 1.3;
-        for (int i = from(); i < bars.size(); i++) if (!Double.isNaN(v[i])) m = Math.max(m, Math.abs(v[i]) * 1.05);
+        for (int i = from(); i < to(); i++) if (!Double.isNaN(v[i])) m = Math.max(m, Math.abs(v[i]) * 1.05);
         bands(c, -m, m, -level, level, true);
+        spans(c);
         dash.setColor(grid);
         c.drawLine(left(), y(0, -m, m), right(), y(0, -m, m), dash);
         gridAndAxis(c, -m, m, 0, false);
         polyline(c, v, -m, m, mainLine, dp(1.5f));
+        crossings(c, Rule.CCI, v, -m, m, -level, level);
         header(c, "CCI 20", "CCI " + fmt(v[at()]), mainLine, null, 0);
     }
 
@@ -363,7 +565,7 @@ final class ChartView extends View {
     private void polyline(Canvas c, double[] v, double lo, double hi, int color, float width) {
         Path p = new Path();
         boolean pen = false;
-        for (int i = from(); i < bars.size(); i++) {
+        for (int i = from(); i < to(); i++) {
             if (Double.isNaN(v[i])) { pen = false; continue; }
             float yy = Math.max(top(), Math.min(bottom(), y(v[i], lo, hi)));
             if (pen) p.lineTo(x(i), yy); else p.moveTo(x(i), yy);

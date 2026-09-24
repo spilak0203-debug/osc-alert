@@ -45,30 +45,42 @@ public class SettingsFragment extends Fragment {
         scroll.addView(root);
 
         section("알림");
-        toggle(Settings.ALERT_3, "3개 합치 알림", "스토캐스틱·RSI·CCI가 같은 날 모두 교차");
-        toggle(Settings.ALERT_2, "2개 일치 알림", "셋 중 둘만 교차해도 따로 알림");
-        toggle(Settings.ALERT_ZONE, "과매수·과매도 구간 진입 알림",
-                "지표가 모두(2개 일치를 켜면 둘 이상) 과매도·과매수 구간에 새로 들어온 날");
+        toggle(Settings.ALERT_3, "3지표 일치 알림", "스토캐스틱·RSI·CCI가 모두 골든(또는 데드)크로스");
+        toggle(Settings.ALERT_2, "2지표 일치 알림", "셋 중 둘만 일치해도 따로 알림");
+        toggle(Settings.ALERT_ZONE_IN, "과매도·과매수 진입 알림", "아래 '구간 판단 지표 수' 이상이 구간에 새로 들어온 날");
+        toggle(Settings.ALERT_ZONE_OUT, "과매도·과매수 탈출 알림", "구간에 있던 지표가 빠져나온 날");
         toggle(Settings.PRE_MARKET, "장 시작 전에도 알림", "다음 거래일 08시대에 같은 알림을 한 번 더");
-        toggle(Settings.LIQUID_ONLY, "매수 쪽은 거래대금 5억 이상만", "20일 평균 거래대금 기준 · 매도 알림은 항상 전부");
-        toggle(Settings.QUIET_DAYS, "신호 없는 날에도 알림", "조건에 맞는 종목이 없다는 알림");
+        toggle(Settings.LIQUID_ONLY, "매수 쪽은 거래대금 5억 이상만", "20일 평균 거래대금 기준 · 매도 쪽은 항상 전부");
+        toggle(Settings.QUIET_DAYS, "신호 없는 날에도 알림", "켜진 알림 종류에 맞는 종목이 없다는 알림");
 
         label("알림 방식");
-        String[][] sounds = {{"sound", "소리"}, {"vibrate", "진동"}, {"both", "소리+진동"}};
-        choice(Settings.SOUND, Settings.sound(c), sounds);
-        MaterialButton test = button("테스트 알림 보내기", true);
+        choice(Settings.sound(c), new String[][]{{"sound", "소리"}, {"vibrate", "진동"}, {"both", "소리+진동"}, {"silent", "무음"}},
+                v -> prefs().edit().putString(Settings.SOUND, v).apply());
+        MaterialButton test = button("테스트 알림 보내기 (켜진 종류별 예시)", true);
         test.setOnClickListener(v -> {
             if (!Notifier.allowed(c)) {
                 Toast.makeText(c, "알림 권한을 허용해야 합니다", Toast.LENGTH_LONG).show();
                 ((MainActivity) requireActivity()).askNotificationPermission();
                 return;
             }
-            Notifier.test(c);
+            int n = Notifier.test(c);
+            Toast.makeText(c, "테스트 알림 " + n + "개를 보냈습니다", Toast.LENGTH_SHORT).show();
         });
 
+        section("일치 판단");
+        label("허용 기간 · 신호일과 그 앞 며칠 안에 교차하면 같이 센다");
+        String[][] windows = new String[Rule.MAX_WINDOW + 1][];
+        for (int d = 0; d <= Rule.MAX_WINDOW; d++) windows[d] = new String[]{String.valueOf(d), d == 0 ? "당일" : d + "일"};
+        choice(String.valueOf(Settings.integer(c, Settings.WINDOW)), windows,
+                v -> prefs().edit().putInt(Settings.WINDOW, Integer.parseInt(v)).apply());
+        label("과매도·과매수 구간 판단 지표 수 · 이 개수 이상이 구간에 있을 때");
+        choice(String.valueOf(Settings.integer(c, Settings.ZONE_NEED)), new String[][]{{"1", "1개"}, {"2", "2개"}, {"3", "3개"}},
+                v -> prefs().edit().putInt(Settings.ZONE_NEED, Integer.parseInt(v)).apply());
+
         section("스토캐스틱");
-        choice(Settings.STOCH_SLOW, Settings.flag(c, Settings.STOCH_SLOW) ? "slow" : "fast",
-                new String[][]{{"slow", "Slow 5-3-3"}, {"fast", "Fast 5-3"}});
+        choice(Settings.flag(c, Settings.STOCH_SLOW) ? "slow" : "fast",
+                new String[][]{{"slow", "Slow 5-3-3"}, {"fast", "Fast 5-3"}},
+                v -> prefs().edit().putBoolean(Settings.STOCH_SLOW, v.equals("slow")).apply());
         toggle(Settings.STOCH_BAND, "밴드 조건 사용", "골든은 직전 %K가 과매도 아래, 데드는 과매수 위일 때만");
         numbers(Settings.STOCH_LO, "과매도", Settings.STOCH_HI, "과매수");
 
@@ -81,7 +93,7 @@ public class SettingsFragment extends Fragment {
         numbers(Settings.CCI_LEVEL, "기준선 (±)", null, null);
 
         section("화면");
-        label("글자 크기 · 위쪽 가−/가+ 버튼으로도 바꿀 수 있습니다");
+        label("글자 크기");
         LinearLayout font = new LinearLayout(c);
         font.setOrientation(LinearLayout.HORIZONTAL);
         MaterialButton smaller = button("가−", false), larger = button("가+", false);
@@ -98,6 +110,9 @@ public class SettingsFragment extends Fragment {
         font.addView(pct);
         font.addView(larger);
         root.addView(font);
+        label("종목을 길게 누르면 복사할 것");
+        choice(Settings.flag(c, Settings.COPY_NAME) ? "name" : "code", new String[][]{{"code", "종목코드"}, {"name", "종목명"}},
+                v -> prefs().edit().putBoolean(Settings.COPY_NAME, v.equals("name")).apply());
 
         section("앱");
         version = label("현재 버전 " + BuildConfig.VERSION_NAME);
@@ -197,8 +212,12 @@ public class SettingsFragment extends Fragment {
         root.addView(row);
     }
 
-    /** Segmented buttons. For STOCH_SLOW the stored value is a boolean. */
-    private void choice(String key, String current, String[][] options) {
+    interface Saver {
+        void save(String value);
+    }
+
+    /** Segmented buttons; `save` receives the chosen option's value. */
+    private void choice(String current, String[][] options, Saver save) {
         Context c = requireContext();
         MaterialButtonToggleGroup g = new MaterialButtonToggleGroup(c);
         g.setSingleSelection(true);
@@ -208,14 +227,12 @@ public class SettingsFragment extends Fragment {
             b.setId(View.generateViewId());
             b.setText(o[1]);
             b.setTag(o[0]);
+            b.setPadding(dp(4), b.getPaddingTop(), dp(4), b.getPaddingBottom());
             g.addView(b, new LinearLayout.LayoutParams(0, -2, 1));
             if (o[0].equals(current)) g.check(b.getId());
         }
         g.addOnButtonCheckedListener((group, id, checked) -> {
-            if (!checked) return;
-            String value = (String) group.findViewById(id).getTag();
-            if (key.equals(Settings.STOCH_SLOW)) prefs().edit().putBoolean(key, value.equals("slow")).apply();
-            else prefs().edit().putString(key, value).apply();
+            if (checked) save.save((String) group.findViewById(id).getTag());
         });
         LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(-1, -2);
         lp.topMargin = dp(4);

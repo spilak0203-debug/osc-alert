@@ -11,6 +11,7 @@ import java.io.File;
 import java.io.FileOutputStream;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
+import java.time.ZonedDateTime;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
@@ -19,8 +20,8 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
 /**
- * The market snapshot both tabs show. market.json is fetched from the repository's release
- * asset and kept on disk; live quotes are layered on top when the user refreshes.
+ * The market snapshot every screen shows. market.json is fetched from the repository's release
+ * asset and kept on disk; live quotes and the two indices are layered on top on refresh.
  */
 final class Repo {
     private Repo() {}
@@ -30,9 +31,12 @@ final class Repo {
     }
 
     static volatile List<Stock> stocks = Collections.emptyList();
+    static volatile List<MarketIndex> indices = Collections.emptyList();
     static volatile String asof = "", error = "";
     static volatile long quotesAt = 0;
     static volatile boolean loading = false;
+    /** Set once the stocks tab has been opened: from then on every refresh fetches all prices. */
+    static volatile boolean wantAll = false;
 
     private static final List<Listener> LISTENERS = new CopyOnWriteArrayList<>();
     private static final ExecutorService IO = Executors.newSingleThreadExecutor();
@@ -42,7 +46,8 @@ final class Repo {
 
     static void unlisten(Listener l) { LISTENERS.remove(l); }
 
-    private static void changed() {
+    /** Tells every screen to redraw, e.g. after a settings change. */
+    static void changed() {
         MAIN.post(() -> { for (Listener l : LISTENERS) l.onChanged(); });
     }
 
@@ -69,7 +74,7 @@ final class Repo {
         return out;
     }
 
-    /** Loads the cached file if nothing is in memory yet. */
+    /** Loads the cached file if nothing is in memory yet, then refreshes. */
     static void ensure(Context c) {
         if (!stocks.isEmpty() || loading) return;
         File f = file(c);
@@ -82,12 +87,12 @@ final class Repo {
                 }
             });
         }
-        refresh(c, true);
+        refresh(c, false);
     }
 
     /**
-     * Re-downloads market.json and then live quotes. `allQuotes` fetches every stock's price
-     * (stocks tab); otherwise only the stocks that currently signal (summary tab).
+     * Re-downloads market.json, the indices and live quotes. `allQuotes` fetches every stock's
+     * price (stocks tab); otherwise only the stocks that currently signal (dashboard).
      */
     static void refresh(Context context, boolean allQuotes) {
         Context c = context.getApplicationContext();
@@ -99,13 +104,20 @@ final class Repo {
             try {
                 List<Stock> fresh = download(c);
                 stocks = fresh;
+                Bars.clear();
                 changed();
-                if (allQuotes) {
+                List<MarketIndex> idx = new ArrayList<>();
+                for (String code : MarketIndex.CODES) {
+                    try { idx.add(MarketIndex.load(code)); } catch (Exception ignored) { }
+                }
+                indices = idx;
+                changed();
+                if (allQuotes || wantAll) {
                     Live.apply(fresh, Live.all());
                 } else {
                     List<String> codes = new ArrayList<>();
                     for (List<Stock> l : Signals.group(c, fresh).values())
-                        for (Stock s : l) codes.add(s.ticker);
+                        for (Stock s : l) if (!codes.contains(s.ticker)) codes.add(s.ticker);
                     if (!codes.isEmpty()) Live.apply(fresh, Live.some(codes));
                 }
                 quotesAt = System.currentTimeMillis();
@@ -116,5 +128,30 @@ final class Repo {
             loading = false;
             changed();
         });
+    }
+
+    /** Title for the top bar: which close the signals are from, and what the market is doing. */
+    static String title() {
+        if (asof.isEmpty()) return loading ? "불러오는 중…" : "신호 없음";
+        return asof.substring(0, 4) + "." + asof.substring(5, 7) + "." + asof.substring(8) + " 종가 기준";
+    }
+
+    static String subtitle() {
+        StringBuilder b = new StringBuilder();
+        if (!indices.isEmpty()) {
+            String s = indices.get(0).session(ZonedDateTime.now(MarketIndex.SEOUL));
+            if (!s.isEmpty()) b.append(s);
+            // After a holiday the latest signals are from the last trading day — say so.
+            if (s.contains("휴장")) b.append(" · 가장 최근 거래일 신호");
+            // The scan runs around 15:50–16:40; until then the latest signals are from the day before.
+            String today = ZonedDateTime.now(MarketIndex.SEOUL).toLocalDate().toString();
+            if ((s.equals("장 마감") || s.equals("장중")) && !asof.equals(today)) b.append(" · 오늘 신호는 장 마감 후");
+        }
+        if (quotesAt > 0) {
+            if (b.length() > 0) b.append(" · ");
+            b.append("시세 ").append(new java.text.SimpleDateFormat("HH:mm", java.util.Locale.KOREA).format(new java.util.Date(quotesAt)));
+        }
+        if (loading) b.append(b.length() > 0 ? " · " : "").append("갱신 중");
+        return b.toString();
     }
 }

@@ -8,10 +8,16 @@ package kr.personal.oscalert;
 public final class Rule {
     private Rule() {}
 
+    public static final int MAX_WINDOW = 4;
+    /** Days of values needed to evaluate the largest window: window + signal day + the day before. */
+    public static final int HISTORY = MAX_WINDOW + 2;
+
     public static final class Config {
         public boolean slow = true;
         public boolean stochBand = true, rsiBand = true, cciBand = true;
         public double stochLo = 20, stochHi = 80, rsiLo = 30, rsiHi = 70, cciLevel = 100;
+        /** An indicator counts if it crossed on the signal day or up to this many days before. */
+        public int window = 0;
     }
 
     /** One day of indicator values. */
@@ -51,6 +57,31 @@ public final class Rule {
                 dn(k0, k1, d0, d1) && (!c.stochBand || k0 > c.stochHi),
                 dn(prev.rsi, last.rsi, prev.rsiSig, last.rsiSig) && (!c.rsiBand || prev.rsi > c.rsiHi),
                 dn(prev.cci, last.cci, lv, lv)};
+    }
+
+    /**
+     * Signal on the last day of `seq` (oldest first): {golden, dead}, each three booleans telling
+     * whether that indicator crossed within the window. A side with no crossing on the last day
+     * is all false, so a signal fires once — on the day the last indicator joins.
+     */
+    public static boolean[][] match(Snap[] seq, Config c) {
+        int n = seq.length;
+        boolean[][] out = new boolean[2][3];
+        if (n < 2) return out;
+        int first = Math.max(1, n - 1 - c.window);
+        boolean[][] today = {golden(seq[n - 2], seq[n - 1], c), dead(seq[n - 2], seq[n - 1], c)};
+        for (int i = first; i < n; i++) {
+            boolean[] g = i == n - 1 ? today[0] : golden(seq[i - 1], seq[i], c);
+            boolean[] d = i == n - 1 ? today[1] : dead(seq[i - 1], seq[i], c);
+            for (int j = 0; j < 3; j++) {
+                out[0][j] |= g[j];
+                out[1][j] |= d[j];
+            }
+        }
+        for (int side = 0; side < 2; side++) {
+            if (count(today[side]) == 0) out[side] = new boolean[3];
+        }
+        return out;
     }
 
     /** How many of the three indicators are oversold (index 0) and overbought (index 1). */

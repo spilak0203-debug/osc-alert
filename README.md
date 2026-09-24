@@ -1,8 +1,9 @@
 # osc-alert
 
 Scans every KOSPI and KOSDAQ stock after the close and notifies your phone when **three
-oscillators cross on the same day**. The Android app lets you tune the rule, browse every stock
-with candle and oscillator charts, and updates itself from this repository's releases.
+oscillators match** — all golden-cross (or all dead-cross) together. The Android app,
+"매매 시그널 알림", lets you tune the rule, shows a dashboard and charts for every stock, and
+updates itself from this repository's releases.
 
 | | Golden confluence (buy) | Dead confluence (sell) |
 |---|---|---|
@@ -11,23 +12,25 @@ with candle and oscillator charts, and updates itself from this repository's rel
 | CCI(20) | crosses above -100 | crosses below +100 |
 
 These are the defaults. In the app you can switch to fast stochastic, turn each band condition
-off or change its levels, and add alerts for 2-of-3 matches and for entering oversold/overbought zones.
+off or change its levels, allow the three crossings to be spread over up to 4 days, and add alerts
+for 2-of-3 matches and for entering or leaving oversold/overbought zones.
 
 ## How it works
 
 ```
 Weekdays 15:50 KST   GitHub Actions runs signal/scan.py
                      → ~200 trading days of Naver daily bars for every stock
-                     → market.json: each stock's indicators on the signal day and the day before
+                     → market-v2.json: each stock's indicators for the last 6 trading days
                        (uploaded to the `market-data` pre-release; not committed)
+                     → market.json: the same, last 2 days only, for app 2.9 and older
                      → signals/latest.json: default-rule confluences (committed, with history)
                      Runs again at 16:40 in case the first run is late.
 Every 30 minutes     The app downloads market.json, evaluates the rule with your settings,
                      and notifies when the signal date changes. Optional repeat at 08:00–09:00.
 ```
 
-Two days of indicator values are enough to evaluate any crossing and band condition, so changing
-settings never needs a new scan. `signal/rule.py` is the reference; `Rule.java` and
+Six days of indicator values are enough to evaluate any crossing, band condition and match window
+(0–4 days), so changing settings never needs a new scan. `signal/rule.py` is the reference; `Rule.java` and
 `Indicators.java` are ports, and JVM tests check them against fixtures produced by Python
 (`tests/make_java_fixtures.py`).
 
@@ -36,14 +39,17 @@ doesn't change, so nothing is sent.
 
 ## App
 
-- **요약 (Summary)**: stocks that signal today by kind, with price, change and volume. Tap to open
-  the Naver chart.
-- **종목 (Stocks)**: every stock, searchable. Tap to expand: candles with 5/20/60/120-day moving
-  averages, signal markers, and stochastic, RSI and CCI panels, each of which can be toggled.
-  Drag sideways on a chart to inspect a day.
-- **설정 (Settings)**: which alerts to send, sound/vibration/both, pre-market repeat, indicator
-  rules, a test notification, font size, and update check.
-- **가− / 가+** in the top bar change the font size.
+- **Top bar**: the close the signals are from and the market session (open, closed, holiday — on
+  holidays the latest trading day is shown), plus a refresh button.
+- **요약 (Dashboard)**: KOSPI and KOSDAQ charts, a tally per signal kind (3- and 2-indicator
+  matches, oversold/overbought entry and exit), and the stocks of each kind.
+- **종목 (Stocks)**: every stock, searchable.
+- Tap any stock to expand: per-indicator state, candles with 5/20/60/120-day moving averages,
+  and stochastic, RSI and CCI panels (each can be toggled). Matching spans are shaded, crosses are
+  dotted, band crossings are ringed. Pinch to zoom, drag sideways to scroll, tap or long-press to
+  read a day, double tap to reset. Long press a row to copy its code (or name).
+- **설정 (Settings)**: which alerts to send, sound/vibration/both/silent, pre-market repeat, match
+  window, zone count, indicator rules, per-kind test notifications, font size, and update check.
 
 Prices shown live come from Naver quote endpoints; pull down to refresh.
 

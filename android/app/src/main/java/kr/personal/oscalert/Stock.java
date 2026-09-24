@@ -6,11 +6,12 @@ import org.json.JSONObject;
 /** One row of market.json plus the live quote, if one has been fetched. */
 final class Stock {
     static final double LIQUIDITY = 5e8;
+    private static final String[] KEYS = {"k_fast", "d_fast", "k_slow", "d_slow", "rsi", "rsi_sig", "cci"};
 
     String ticker, name, market;
     double cap, close = Double.NaN, change = Double.NaN, volume = Double.NaN, dv20 = Double.NaN;
-    /** Indicator values on the day before the signal day and on the signal day; null if not traded. */
-    Rule.Snap prev, last;
+    /** Indicator values for the last few days up to the signal day, oldest first; null if not traded. */
+    Rule.Snap[] seq;
 
     // Live quote (NaN until fetched)
     double livePrice = Double.NaN, liveChange = Double.NaN, liveVolume = Double.NaN;
@@ -25,30 +26,24 @@ final class Stock {
         s.change = num(o, "chg");
         s.volume = num(o, "vol");
         s.dv20 = num(o, "dv20");
-        if (o.has("rsi")) {
-            s.prev = new Rule.Snap();
-            s.last = new Rule.Snap();
-            fill(o, "k_fast", s.prev, s.last, 0);
-            fill(o, "d_fast", s.prev, s.last, 1);
-            fill(o, "k_slow", s.prev, s.last, 2);
-            fill(o, "d_slow", s.prev, s.last, 3);
-            fill(o, "rsi", s.prev, s.last, 4);
-            fill(o, "rsi_sig", s.prev, s.last, 5);
-            fill(o, "cci", s.prev, s.last, 6);
+        JSONArray first = o.optJSONArray("rsi");
+        if (first != null && first.length() >= 2) {
+            int n = first.length();
+            s.seq = new Rule.Snap[n];
+            for (int i = 0; i < n; i++) s.seq[i] = new Rule.Snap();
+            for (int f = 0; f < KEYS.length; f++) {
+                JSONArray a = o.optJSONArray(KEYS[f]);
+                for (int i = 0; i < n; i++) {
+                    double v = a == null || i >= a.length() || a.isNull(i) ? Double.NaN : a.optDouble(i, Double.NaN);
+                    set(s.seq[i], f, v);
+                }
+            }
         }
         return s;
     }
 
     private static double num(JSONObject o, String key) {
         return o.isNull(key) ? Double.NaN : o.optDouble(key, Double.NaN);
-    }
-
-    private static void fill(JSONObject o, String key, Rule.Snap prev, Rule.Snap last, int field) {
-        JSONArray a = o.optJSONArray(key);
-        double p = a == null || a.isNull(0) ? Double.NaN : a.optDouble(0, Double.NaN);
-        double l = a == null || a.isNull(1) ? Double.NaN : a.optDouble(1, Double.NaN);
-        set(prev, field, p);
-        set(last, field, l);
     }
 
     private static void set(Rule.Snap s, int field, double v) {
@@ -61,6 +56,14 @@ final class Stock {
             case 5: s.rsiSig = v; break;
             default: s.cci = v;
         }
+    }
+
+    Rule.Snap prev() {
+        return seq == null ? null : seq[seq.length - 2];
+    }
+
+    Rule.Snap last() {
+        return seq == null ? null : seq[seq.length - 1];
     }
 
     boolean liquid() {
