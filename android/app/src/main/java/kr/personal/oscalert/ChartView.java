@@ -24,7 +24,7 @@ import java.util.Locale;
  * Panels in the same group share a crosshair — touching any panel selects that day in all.
  */
 final class ChartView extends View {
-    enum Type { CANDLE, STOCH, RSI, CCI }
+    enum Type { CANDLE, VOLUME, STOCH, RSI, CCI }
 
     static final int WINDOW = 120, MIN_BARS = 20;
 
@@ -132,6 +132,7 @@ final class ChartView extends View {
         this.showSignals = showSignals;
         this.group = group;
         selected = -1;
+        volumeMa = null;
         measureGutter();
         if (bars != null && showSignals) annotate();
         invalidate();
@@ -187,7 +188,7 @@ final class ChartView extends View {
 
     @Override
     protected void onMeasure(int w, int h) {
-        int body = type == Type.CANDLE ? (compact ? 150 : 230) : 110;
+        int body = type == Type.CANDLE ? (compact ? 150 : 230) : type == Type.VOLUME ? 70 : 110;
         int height = (int) dp(body) + (int) sp(type == Type.CANDLE ? 46 : 16);
         setMeasuredDimension(MeasureSpec.getSize(w), height);
     }
@@ -349,6 +350,7 @@ final class ChartView extends View {
         }
         switch (type) {
             case CANDLE: drawCandles(c); break;
+            case VOLUME: drawVolume(c); break;
             case STOCH: drawStoch(c); break;
             case RSI: drawRsi(c); break;
             default: drawCci(c);
@@ -514,6 +516,46 @@ final class ChartView extends View {
         fill.setStyle(solid ? Paint.Style.FILL : Paint.Style.STROKE);
         fill.setStrokeWidth(dp(1.2f));
         c.drawPath(p, fill);
+    }
+
+    Type type() {
+        return type;
+    }
+
+    private double[] volumeMa;
+
+    /** Volume bars coloured like the candles, with the 20-day average volume as a line. */
+    private void drawVolume(Canvas c) {
+        if (volumeMa == null || volumeMa.length != bars.size()) volumeMa = Indicators.sma(bars.volume, 20);
+        double max = 1;
+        for (int i = from(); i < to(); i++) {
+            if (!Double.isNaN(bars.volume[i])) max = Math.max(max, bars.volume[i]);
+            if (!Double.isNaN(volumeMa[i])) max = Math.max(max, volumeMa[i]);
+        }
+        max *= 1.08;
+        spans(c);
+        gridAndAxis(c, 0, max, 0, false);
+        line.setColor(grid);
+        c.drawLine(left(), y(max / 2, 0, max), right(), y(max / 2, 0, max), line);
+        axisLabel(c, compactNumber(max / 2), y(max / 2, 0, max));
+        float w = Math.max(1f, step() * 0.62f);
+        fill.setStyle(Paint.Style.FILL);
+        for (int i = from(); i < to(); i++) {
+            if (Double.isNaN(bars.volume[i])) continue;
+            int color = bars.close[i] == bars.open[i] ? flat : bars.close[i] > bars.open[i] ? up : down;
+            fill.setColor(withAlpha(color, 0xB0));
+            c.drawRect(x(i) - w / 2, y(bars.volume[i], 0, max), x(i) + w / 2, bottom(), fill);
+        }
+        polyline(c, volumeMa, 0, max, sigLine, dp(1.2f));
+        int i = at();
+        header(c, "거래량", compactNumber(bars.volume[i]), onSurface, "20일 평균 " + compactNumber(volumeMa[i]), sigLine);
+    }
+
+    private static String compactNumber(double v) {
+        if (Double.isNaN(v)) return "-";
+        if (v >= 1e8) return String.format(Locale.KOREA, "%,.1f억", v / 1e8);
+        if (v >= 1e4) return String.format(Locale.KOREA, "%,.0f만", v / 1e4);
+        return String.format(Locale.KOREA, "%,.0f", v);
     }
 
     private void drawStoch(Canvas c) {

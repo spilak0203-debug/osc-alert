@@ -27,7 +27,8 @@ final class Settings {
     static final String THEME = "theme";                     // system | light | dark
     static final String FONT_SCALE = "fontScale";
     static final String COPY_NAME = "copyName";              // long press copies the name instead of the code
-    static final String SHOW_MA = "showMa", SHOW_STOCH = "showStoch", SHOW_RSI = "showRsi", SHOW_CCI = "showCci";
+    static final String SHOW_MA = "showMa", SHOW_VOLUME = "showVolume";
+    static final String SHOW_STOCH = "showStoch", SHOW_RSI = "showRsi", SHOW_CCI = "showCci";
 
     static final float FONT_MIN = 0.7f, FONT_MAX = 2.0f, FONT_STEP = 0.1f;
 

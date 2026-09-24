@@ -606,8 +606,8 @@ final class StockAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder> {
                 }
                 return;
             }
-            String[][] defs = {{Settings.SHOW_MA, "이평선"}, {Settings.SHOW_STOCH, "스토캐스틱"},
-                    {Settings.SHOW_RSI, "RSI"}, {Settings.SHOW_CCI, "CCI"}};
+            String[][] defs = {{Settings.SHOW_MA, "이평선"}, {Settings.SHOW_VOLUME, "거래량"},
+                    {Settings.SHOW_STOCH, "스토캐스틱"}, {Settings.SHOW_RSI, "RSI"}, {Settings.SHOW_CCI, "CCI"}};
             for (String[] d : defs) {
                 Chip chip = new Chip(c, null, com.google.android.material.R.attr.chipStyle);
                 chip.setCheckable(true);
@@ -624,10 +624,17 @@ final class StockAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder> {
         }
 
         private void applyVisibility(Context c) {
-            if (panels.size() < 4) return;
-            panels.get(1).setVisibility(Settings.flag(c, Settings.SHOW_STOCH) ? View.VISIBLE : View.GONE);
-            panels.get(2).setVisibility(Settings.flag(c, Settings.SHOW_RSI) ? View.VISIBLE : View.GONE);
-            panels.get(3).setVisibility(Settings.flag(c, Settings.SHOW_CCI) ? View.VISIBLE : View.GONE);
+            for (ChartView v : panels) {
+                String key;
+                switch (v.type()) {
+                    case VOLUME: key = Settings.SHOW_VOLUME; break;
+                    case STOCH: key = Settings.SHOW_STOCH; break;
+                    case RSI: key = Settings.SHOW_RSI; break;
+                    case CCI: key = Settings.SHOW_CCI; break;
+                    default: continue;
+                }
+                v.setVisibility(Settings.flag(c, key) ? View.VISIBLE : View.GONE);
+            }
         }
     }
 }
