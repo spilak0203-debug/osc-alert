@@ -42,6 +42,8 @@ final class ChartView extends View {
     private int[] goldLevel, deadLevel, goldStart, deadStart;
     /** Per bar: which indicators crossed that day (stoch, rsi, cci), under the current rule. */
     private boolean[][] goldPart, deadPart;
+    /** Per bar: every crossing of the two lines, band condition or not (stochastic and RSI only). */
+    private boolean[][] goldCross, deadCross;
     private List<ChartView> group;
     private int selected = -1;
     private Viewport vp = new Viewport();
@@ -143,10 +145,16 @@ final class ChartView extends View {
         int n = bars.size();
         goldLevel = new int[n]; deadLevel = new int[n]; goldStart = new int[n]; deadStart = new int[n];
         goldPart = new boolean[n][3]; deadPart = new boolean[n][3];
+        goldCross = new boolean[n][3]; deadCross = new boolean[n][3];
+        Rule.Config plain = new Rule.Config();
+        plain.slow = cfg.slow;
+        plain.stochBand = plain.rsiBand = false;
         Indicators.Series s = bars.series;
         for (int i = 1; i < n; i++) {
             goldPart[i] = Rule.golden(s.snap(i - 1), s.snap(i), cfg);
             deadPart[i] = Rule.dead(s.snap(i - 1), s.snap(i), cfg);
+            goldCross[i] = Rule.golden(s.snap(i - 1), s.snap(i), plain);
+            deadCross[i] = Rule.dead(s.snap(i - 1), s.snap(i), plain);
         }
         for (int i = 1; i < n; i++) {
             int from = Math.max(0, i - Rule.HISTORY + 1);
@@ -428,9 +436,9 @@ final class ChartView extends View {
     }
 
     /**
-     * Dots on the oscillator's line: filled red for its golden cross, filled blue for its dead
-     * cross (as the rule defines them), and hollow rings where the line crosses a band level —
-     * red for the oversold level, blue for the overbought one.
+     * Dots on the oscillator's line: red for golden crosses and blue for dead ones — large when
+     * the cross meets the band condition (counts toward signals), small otherwise — and hollow
+     * rings where the line crosses a band level: red for oversold, blue for overbought.
      */
     private void crossings(Canvas c, int part, double[] v, double lo, double hi, double low, double high) {
         if (!showSignals || goldPart == null) return;
@@ -451,13 +459,21 @@ final class ChartView extends View {
                 c.drawCircle(xx, y(high, lo, hi), r - dp(1), fill);
             }
             fill.setStyle(Paint.Style.FILL);
+            // Crossings that meet the band condition count toward signals: large dots.
+            // Other crossings of the two lines: small, faint dots. (CCI's crossing is the band itself.)
             if (goldPart[i][part]) {
                 fill.setColor(up);
                 c.drawCircle(xx, yy, r, fill);
+            } else if (part != Rule.CCI && goldCross[i][part]) {
+                fill.setColor(withAlpha(up, 0xA0));
+                c.drawCircle(xx, yy, r * 0.55f, fill);
             }
             if (deadPart[i][part]) {
                 fill.setColor(down);
                 c.drawCircle(xx, yy, r, fill);
+            } else if (part != Rule.CCI && deadCross[i][part]) {
+                fill.setColor(withAlpha(down, 0xA0));
+                c.drawCircle(xx, yy, r * 0.55f, fill);
             }
         }
     }

@@ -1,7 +1,8 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <style name="Theme.OscAlert" parent="Theme.Material3.DayNight.NoActionBar">
+    <style name="Theme.OscAlert" parent="Theme.Material3.Light.NoActionBar">
         <item name="colorPrimary">@color/brand</item>
         <item name="android:statusBarColor">?attr/colorSurface</item>
+        <item name="android:forceDarkAllowed">false</item>
     </style>
 </resources>

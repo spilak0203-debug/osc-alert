@@ -44,12 +44,10 @@ public class MainActivity extends AppCompatActivity implements Repo.Listener {
     protected void onCreate(Bundle state) {
         super.onCreate(state);
         setContentView(R.layout.activity_main);
-        // Dark status-bar icons on the light theme, light ones on the dark theme.
-        boolean night = (getResources().getConfiguration().uiMode & Configuration.UI_MODE_NIGHT_MASK)
-                == Configuration.UI_MODE_NIGHT_YES;
+        // The app is always light, so the status-bar icons are always dark.
         WindowInsetsControllerCompat bars = WindowCompat.getInsetsController(getWindow(), getWindow().getDecorView());
-        bars.setAppearanceLightStatusBars(!night);
-        bars.setAppearanceLightNavigationBars(!night);
+        bars.setAppearanceLightStatusBars(true);
+        bars.setAppearanceLightNavigationBars(true);
         Notifier.channels(this);
         SignalWorker.schedule(this);
 
