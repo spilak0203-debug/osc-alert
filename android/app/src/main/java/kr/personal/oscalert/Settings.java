@@ -104,6 +104,20 @@ final class Settings {
         return now;
     }
 
+    // ---- stock list order ---------------------------------------------------------------------
+
+    static final String SORT = "sort";
+    static final String[] SORTS = {"favorite", "cap", "name", "code", "rise", "fall"};
+    static final String[] SORT_LABELS = {"즐겨찾기순", "시총순", "가나다순", "종목코드순", "급등순", "급락순"};
+
+    static String sort(Context c) {
+        return prefs(c).getString(SORT, "favorite");
+    }
+
+    static void setSort(Context c, String sort) {
+        prefs(c).edit().putString(SORT, sort).apply();
+    }
+
     static String theme(Context c) {
         return prefs(c).getString(THEME, "system");
     }

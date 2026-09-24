@@ -75,6 +75,26 @@ public class ListFragment extends Fragment implements Repo.Listener {
                     render();
                 }
             });
+            v.findViewById(R.id.sort_box).setVisibility(View.VISIBLE);
+            com.google.android.material.chip.ChipGroup group = v.findViewById(R.id.sort);
+            String current = Settings.sort(requireContext());
+            for (int i = 0; i < Settings.SORTS.length; i++) {
+                com.google.android.material.chip.Chip chip = new com.google.android.material.chip.Chip(
+                        requireContext(), null, com.google.android.material.R.attr.chipStyle);
+                chip.setText(Settings.SORT_LABELS[i]);
+                chip.setTag(Settings.SORTS[i]);
+                chip.setCheckable(true);
+                chip.setCheckedIconVisible(false);
+                chip.setId(View.generateViewId());
+                group.addView(chip);
+                if (Settings.SORTS[i].equals(current)) chip.setChecked(true);
+            }
+            group.setOnCheckedStateChangeListener((g, ids) -> {
+                if (ids.isEmpty()) return;
+                Settings.setSort(requireContext(), (String) g.findViewById(ids.get(0)).getTag());
+                render();
+                list.scrollToPosition(0);
+            });
         }
         return v;
     }
@@ -125,8 +145,14 @@ public class ListFragment extends Fragment implements Repo.Listener {
             Map<Signals.Kind, List<Stock>> groups = Signals.group(requireContext(), stocks);
             items.add(new StockAdapter.Counts(groups));
             headers.clear();
+            // Favourites lead each group; the sort is stable so the rest keep their order.
+            java.util.Set<String> favs = Settings.favorites(requireContext());
             for (Map.Entry<Signals.Kind, List<Stock>> e : groups.entrySet()) {
                 if (e.getValue().isEmpty()) continue;
+                List<Stock> group = new ArrayList<>(e.getValue());
+                java.util.Collections.sort(group, (a, b) ->
+                        Boolean.compare(favs.contains(b.ticker), favs.contains(a.ticker)));
+                e.setValue(group);
                 StockAdapter.Section header = new StockAdapter.Section(e.getKey(), e.getValue().size());
                 headers.put(e.getKey(), header);
                 items.add(header);
@@ -135,14 +161,20 @@ public class ListFragment extends Fragment implements Repo.Listener {
             String filter = Settings.filterSummary(requireContext());
             if (!filter.isEmpty()) s.append(s.length() > 0 ? "\n" : "").append("필터: ").append(filter).append(" · 설정 탭에서 변경");
         } else {
-            // Favourites first, then everything else; both follow the filter and the search.
+            // Filter and search first, then the chosen order. "favorite" keeps favourites in their
+            // own group on top, each group by market cap.
+            String sort = Settings.sort(requireContext());
             java.util.Set<String> favs = Settings.favorites(requireContext());
-            List<Object> starred = new ArrayList<>(), rest = new ArrayList<>();
+            List<Stock> shownStocks = new ArrayList<>();
             for (Stock st : stocks) {
                 if (!Settings.passes(requireContext(), st)) continue;
                 if (!query.isEmpty() && !st.name.toLowerCase(Locale.ROOT).contains(query) && !st.ticker.contains(query)) continue;
-                (favs.contains(st.ticker) ? starred : rest).add(st);
+                shownStocks.add(st);
             }
+            java.util.Collections.sort(shownStocks, order(sort));
+            List<Object> starred = new ArrayList<>(), rest = new ArrayList<>();
+            for (Stock st : shownStocks)
+                (sort.equals("favorite") && favs.contains(st.ticker) ? starred : rest).add(st);
             int shown = starred.size() + rest.size();
             if (!starred.isEmpty()) {
                 items.add("★ 즐겨찾기 · " + starred.size() + "종목");
@@ -159,5 +191,33 @@ public class ListFragment extends Fragment implements Repo.Listener {
         status.setText(s);
         status.setVisibility(s.length() == 0 ? View.GONE : View.VISIBLE);
         adapter.submit(items);
+    }
+
+    /** Stocks without a value for the sort key go last; ties fall back to market cap. */
+    private static java.util.Comparator<Stock> order(String sort) {
+        java.util.Comparator<Stock> byCap = (a, b) -> Double.compare(nz(b.cap), nz(a.cap));
+        switch (sort) {
+            case "name":
+                java.text.Collator ko = java.text.Collator.getInstance(Locale.KOREAN);
+                return (a, b) -> ko.compare(a.name, b.name);
+            case "code":
+                return (a, b) -> a.ticker.compareTo(b.ticker);
+            case "rise":
+                return ((java.util.Comparator<Stock>) (a, b) -> Double.compare(nz(b.changePct()), nz(a.changePct())))
+                        .thenComparing(byCap);
+            case "fall":
+                return ((java.util.Comparator<Stock>) (a, b) -> Double.compare(pz(a.changePct()), pz(b.changePct())))
+                        .thenComparing(byCap);
+            default:
+                return byCap;
+        }
+    }
+
+    private static double nz(double v) {
+        return Double.isNaN(v) ? Double.NEGATIVE_INFINITY : v;
+    }
+
+    private static double pz(double v) {
+        return Double.isNaN(v) ? Double.POSITIVE_INFINITY : v;
     }
 }

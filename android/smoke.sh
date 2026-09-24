@@ -45,6 +45,7 @@ if hit is not None:
 EOF
 )
   if [ -z "$b" ]; then echo "not found: $1"; return 1; fi
+  echo "tap $1 at $b"
   adb shell input tap $b
 }
 
@@ -70,8 +71,13 @@ shot 1d-summary-oscillators
 
 tap_text "종목" && sleep 25
 shot 2-stocks
-tap_text "즐겨찾기" && sleep 3
+tap_text "즐겨찾기 별" && sleep 3
 shot 2b-favorite
+tap_text "급등순" && sleep 3
+shot 2c-sort-rise
+tap_text "가나다순" && sleep 3
+shot 2d-sort-name
+tap_text "즐겨찾기순" && sleep 3
 tap_text "삼성전자" && sleep 12
 shot 3-stock-expanded
 # Vertical drags that start on a chart must scroll the list.
