@@ -135,13 +135,21 @@ public class ListFragment extends Fragment implements Repo.Listener {
             String filter = Settings.filterSummary(requireContext());
             if (!filter.isEmpty()) s.append(s.length() > 0 ? "\n" : "").append("필터: ").append(filter).append(" · 설정 탭에서 변경");
         } else {
-            int shown = 0;
+            // Favourites first, then everything else; both follow the filter and the search.
+            java.util.Set<String> favs = Settings.favorites(requireContext());
+            List<Object> starred = new ArrayList<>(), rest = new ArrayList<>();
             for (Stock st : stocks) {
                 if (!Settings.passes(requireContext(), st)) continue;
                 if (!query.isEmpty() && !st.name.toLowerCase(Locale.ROOT).contains(query) && !st.ticker.contains(query)) continue;
-                items.add(st);
-                shown++;
+                (favs.contains(st.ticker) ? starred : rest).add(st);
             }
+            int shown = starred.size() + rest.size();
+            if (!starred.isEmpty()) {
+                items.add("★ 즐겨찾기 · " + starred.size() + "종목");
+                items.addAll(starred);
+                if (!rest.isEmpty()) items.add("전체 종목 · " + rest.size() + "종목");
+            }
+            items.addAll(rest);
             String filter = Settings.filterSummary(requireContext());
             if (!filter.isEmpty()) s.append(s.length() > 0 ? "\n" : "").append("필터: ").append(filter).append(" · ").append(shown).append("종목");
             if (!query.isEmpty()) s.append(s.length() > 0 ? "\n" : "").append("검색 결과 ").append(shown).append("종목");

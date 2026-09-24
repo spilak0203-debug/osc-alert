@@ -83,6 +83,27 @@ final class Settings {
                 .putBoolean("plainCrossDefaults", true).apply();
     }
 
+    // ---- favourites -------------------------------------------------------------------------
+
+    static final String FAVORITES = "favorites";
+
+    static java.util.Set<String> favorites(Context c) {
+        return new java.util.HashSet<>(prefs(c).getStringSet(FAVORITES, java.util.Collections.emptySet()));
+    }
+
+    static boolean favorite(Context c, String ticker) {
+        return prefs(c).getStringSet(FAVORITES, java.util.Collections.emptySet()).contains(ticker);
+    }
+
+    /** Adds or removes the stock; returns whether it is a favourite now. */
+    static boolean toggleFavorite(Context c, String ticker) {
+        java.util.Set<String> set = favorites(c);
+        boolean now = !set.remove(ticker);
+        if (now) set.add(ticker);
+        prefs(c).edit().putStringSet(FAVORITES, set).apply();
+        return now;
+    }
+
     static String theme(Context c) {
         return prefs(c).getString(THEME, "system");
     }

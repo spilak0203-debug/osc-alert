@@ -310,6 +310,7 @@ final class StockAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder> {
 
     final class Row extends RecyclerView.ViewHolder {
         final View head, detail, open;
+        final android.widget.ImageView star;
         final TextView name, sub, price, change, volume;
         /** Metrics, the day's signals, the indicator table and the chart legend, built in code. */
         final LinearLayout info;
@@ -326,6 +327,12 @@ final class StockAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder> {
             head = v.findViewById(R.id.head);
             detail = v.findViewById(R.id.detail);
             open = v.findViewById(R.id.open);
+            star = v.findViewById(R.id.star);
+            star.setOnClickListener(x -> {
+                boolean now = Settings.toggleFavorite(x.getContext(), stock.ticker);
+                paintStar(now);
+                Toast.makeText(x.getContext(), stock.name + (now ? " 즐겨찾기에 추가" : " 즐겨찾기에서 뺌"), Toast.LENGTH_SHORT).show();
+            });
             name = v.findViewById(R.id.name);
             sub = v.findViewById(R.id.sub);
             price = v.findViewById(R.id.price);
@@ -362,9 +369,19 @@ final class StockAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder> {
             change.setText(percent(s.changePct()));
             change.setTextColor(changeColor(c, s.changePct()));
             volume.setText("거래량 " + compact(s.tradedVolume()));
+            paintStar(Settings.favorite(c, s.ticker));
             boolean open = s.ticker.equals(expanded);
             detail.setVisibility(open ? View.VISIBLE : View.GONE);
             if (open) bindDetail(s);
+        }
+
+        private void paintStar(boolean on) {
+            Context c = itemView.getContext();
+            star.setImageResource(on ? R.drawable.ic_star : R.drawable.ic_star_border);
+            star.setImageTintList(android.content.res.ColorStateList.valueOf(on
+                    ? ContextCompat.getColor(c, R.color.favorite)
+                    : com.google.android.material.color.MaterialColors.getColor(c,
+                            com.google.android.material.R.attr.colorOnSurfaceVariant, 0xFF888888)));
         }
 
         private void bindDetail(Stock s) {

@@ -70,6 +70,8 @@ shot 1d-summary-oscillators
 
 tap_text "종목" && sleep 25
 shot 2-stocks
+tap_text "즐겨찾기" && sleep 3
+shot 2b-favorite
 tap_text "삼성전자" && sleep 12
 shot 3-stock-expanded
 # Vertical drags that start on a chart must scroll the list.

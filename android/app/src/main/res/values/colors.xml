@@ -13,4 +13,5 @@
     <color name="line_signal">#F59E0B</color>
     <color name="band">#33888888</color>
     <color name="grid">#22888888</color>
+    <color name="favorite">#F5B301</color>
 </resources>
