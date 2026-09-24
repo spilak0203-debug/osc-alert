@@ -1,0 +1,52 @@
+plugins {
+    id 'com.android.application'
+}
+
+// 신호 JSON 주소. GitHub Actions가 `-PsignalsUrl=...`로 저장소 주소를 넣어 굽는다.
+// 앱 설정 화면에서 언제든 바꿀 수 있다.
+def signalsUrl = project.findProperty('signalsUrl') ?: ''
+
+android {
+    namespace 'kr.personal.oscalert'
+    compileSdk 35
+
+    defaultConfig {
+        applicationId 'kr.personal.oscalert'
+        minSdk 26
+        targetSdk 35
+        versionCode 1
+        versionName '1.0'
+        buildConfigField 'String', 'SIGNALS_URL', "\"${signalsUrl}\""
+    }
+
+    buildFeatures {
+        buildConfig true
+    }
+
+    signingConfigs {
+        // 늘 같은 키로 서명해야 새 APK가 기존 앱 위에 업데이트 설치된다.
+        // 저장소 시크릿이 있으면 워크플로가 `release.keystore`를 그걸로 바꿔 끼운다.
+        release {
+            storeFile file('release.keystore')
+            storePassword project.findProperty('storePassword') ?: 'oscalert'
+            keyAlias 'osc'
+            keyPassword project.findProperty('keyPassword') ?: 'oscalert'
+        }
+    }
+
+    buildTypes {
+        release {
+            minifyEnabled false
+            signingConfig signingConfigs.release
+        }
+    }
+
+    compileOptions {
+        sourceCompatibility JavaVersion.VERSION_17
+        targetCompatibility JavaVersion.VERSION_17
+    }
+}
+
+dependencies {
+    implementation 'androidx.work:work-runtime:2.9.1'
+}
