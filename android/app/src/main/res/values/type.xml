@@ -1,0 +1,49 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Material 3 type scale in Noto Sans KR. Titles and labels use the medium weight, like M3's own. -->
+    <style name="TextAppearance.Osc.HeadlineSmall" parent="TextAppearance.Material3.HeadlineSmall">
+        <item name="fontFamily">@font/noto_sans_kr</item>
+        <item name="android:fontFamily">@font/noto_sans_kr</item>
+    </style>
+    <style name="TextAppearance.Osc.TitleLarge" parent="TextAppearance.Material3.TitleLarge">
+        <item name="fontFamily">@font/noto_sans_kr</item>
+        <item name="android:fontFamily">@font/noto_sans_kr</item>
+    </style>
+    <style name="TextAppearance.Osc.TitleMedium" parent="TextAppearance.Material3.TitleMedium">
+        <item name="fontFamily">@font/noto_sans_kr_medium</item>
+        <item name="android:fontFamily">@font/noto_sans_kr_medium</item>
+    </style>
+    <style name="TextAppearance.Osc.TitleSmall" parent="TextAppearance.Material3.TitleSmall">
+        <item name="fontFamily">@font/noto_sans_kr_medium</item>
+        <item name="android:fontFamily">@font/noto_sans_kr_medium</item>
+    </style>
+    <style name="TextAppearance.Osc.BodyLarge" parent="TextAppearance.Material3.BodyLarge">
+        <item name="fontFamily">@font/noto_sans_kr</item>
+        <item name="android:fontFamily">@font/noto_sans_kr</item>
+    </style>
+    <style name="TextAppearance.Osc.BodyMedium" parent="TextAppearance.Material3.BodyMedium">
+        <item name="fontFamily">@font/noto_sans_kr</item>
+        <item name="android:fontFamily">@font/noto_sans_kr</item>
+    </style>
+    <style name="TextAppearance.Osc.BodySmall" parent="TextAppearance.Material3.BodySmall">
+        <item name="fontFamily">@font/noto_sans_kr</item>
+        <item name="android:fontFamily">@font/noto_sans_kr</item>
+    </style>
+    <style name="TextAppearance.Osc.LabelLarge" parent="TextAppearance.Material3.LabelLarge">
+        <item name="fontFamily">@font/noto_sans_kr_medium</item>
+        <item name="android:fontFamily">@font/noto_sans_kr_medium</item>
+    </style>
+    <style name="TextAppearance.Osc.LabelMedium" parent="TextAppearance.Material3.LabelMedium">
+        <item name="fontFamily">@font/noto_sans_kr_medium</item>
+        <item name="android:fontFamily">@font/noto_sans_kr_medium</item>
+    </style>
+    <style name="TextAppearance.Osc.LabelSmall" parent="TextAppearance.Material3.LabelSmall">
+        <item name="fontFamily">@font/noto_sans_kr_medium</item>
+        <item name="android:fontFamily">@font/noto_sans_kr_medium</item>
+    </style>
+    <!-- A slimmer pill behind the selected tab, to fit the lower bottom bar. -->
+    <style name="Osc.NavIndicator" parent="Widget.Material3.BottomNavigationView.ActiveIndicator">
+        <item name="android:height">26dp</item>
+        <item name="android:width">56dp</item>
+    </style>
+</resources>

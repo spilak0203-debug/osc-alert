@@ -83,13 +83,13 @@
         android:paddingBottom="12dp"
         android:visibility="gone">
 
-        <TextView
+        <LinearLayout
             android:id="@+id/info"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
+            android:orientation="vertical"
             android:paddingHorizontal="16dp"
-            android:paddingBottom="4dp"
-            android:textAppearance="?attr/textAppearanceBodyMedium" />
+            android:paddingBottom="8dp" />
 
         <com.google.android.material.chip.ChipGroup
             android:id="@+id/toggles"

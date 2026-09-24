@@ -71,6 +71,7 @@ final class ChartView extends View {
         muted = MaterialColors.getColor(c, com.google.android.material.R.attr.colorOnSurfaceVariant, 0xFF666666);
         surface = MaterialColors.getColor(c, com.google.android.material.R.attr.colorSurface, 0xFFFFFFFF);
         text.setTextSize(sp(11));
+        text.setTypeface(androidx.core.content.res.ResourcesCompat.getFont(c, R.font.noto_sans_kr));
         line.setStyle(Paint.Style.STROKE);
         dash.setStyle(Paint.Style.STROKE);
         dash.setStrokeWidth(dp(1));
@@ -131,6 +132,7 @@ final class ChartView extends View {
         this.showSignals = showSignals;
         this.group = group;
         selected = -1;
+        measureGutter();
         if (bars != null && showSignals) annotate();
         invalidate();
     }
@@ -186,7 +188,7 @@ final class ChartView extends View {
     @Override
     protected void onMeasure(int w, int h) {
         int body = type == Type.CANDLE ? (compact ? 150 : 230) : 110;
-        int height = (int) dp(body) + (int) sp(type == Type.CANDLE ? 30 : 16);
+        int height = (int) dp(body) + (int) sp(type == Type.CANDLE ? 46 : 16);
         setMeasuredDimension(MeasureSpec.getSize(w), height);
     }
 
@@ -207,12 +209,29 @@ final class ChartView extends View {
 
     private int from() { return to() - shown(); }
 
-    private float left() { return dp(2); }
+    private float left() { return dp(4); }
 
-    /** The plot runs to the edge; axis labels are drawn inside it on a translucent backing. */
-    private float right() { return getWidth() - dp(2); }
+    /**
+     * Axis labels sit in a gutter to the right of the plot, never on top of it. The gutter is as
+     * wide as this stock's largest price label, and every panel of a stock gets the same width so
+     * the days line up across panels.
+     */
+    private float right() { return getWidth() - gutter; }
 
-    private float top() { return sp(18); }
+    private float gutter;
+
+    private void measureGutter() {
+        float w = text.measureText("-100");
+        if (bars != null) {
+            double max = 0;
+            for (double h : bars.high) if (!Double.isNaN(h)) max = Math.max(max, h);
+            w = Math.max(w, text.measureText(fmtAxis(max * 1.1)));
+        }
+        gutter = w + dp(8);
+    }
+
+    /** Candles need two header lines (the day's prices and the moving-average legend) above the plot. */
+    private float top() { return type == Type.CANDLE ? sp(34) : sp(18); }
 
     private float bottom() { return getHeight() - (type == Type.CANDLE ? sp(16) : dp(4)); }
 
@@ -390,7 +409,7 @@ final class ChartView extends View {
         c.drawText(head, left(), sp(13), text);
         if (showMa) {
             float xx = left();
-            float yy = top() + sp(12);
+            float yy = sp(28);
             for (int m = 0; m < Indicators.MA.length; m++) {
                 String label = "MA" + Indicators.MA[m] + " ";
                 text.setColor(maColors[m]);
@@ -584,17 +603,12 @@ final class ChartView extends View {
         axisLabel(c, s, yy, false);
     }
 
-    /** `below` puts the label under its line (used for the lower band so it never sits on the dashes). */
+    /** Labels live in the gutter, so `below` no longer matters; kept for the band labels' call sites. */
     private void axisLabel(Canvas c, String s, float yy, boolean below) {
-        float w = text.measureText(s), h = sp(11);
-        float x1 = right() - w - dp(4), y1 = below ? yy + h + dp(2) : yy - dp(2);
-        if (!below && y1 - h < top()) y1 = yy + h + dp(2);        // no room above: put it below
-        if (below && y1 > bottom()) y1 = yy - dp(2);
-        fill.setStyle(Paint.Style.FILL);
-        fill.setColor((surface & 0x00FFFFFF) | 0xCC000000);
-        c.drawRect(x1 - dp(2), y1 - h, right() - dp(1), y1 + dp(2), fill);
+        // In the gutter, vertically centred on its line and kept inside the panel.
+        float base = Math.max(top() + sp(8), Math.min(bottom(), yy + sp(4)));
         text.setColor(muted);
-        c.drawText(s, x1, y1, text);
+        c.drawText(s, right() + dp(4), base, text);
     }
 
     private void polyline(Canvas c, double[] v, double lo, double hi, int color, float width) {

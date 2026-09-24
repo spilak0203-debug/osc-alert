@@ -117,7 +117,7 @@ public class SettingsFragment extends Fragment {
         root.removeView(smaller);
         root.removeView(larger);
         TextView pct = new TextView(c);
-        pct.setTextAppearance(com.google.android.material.R.style.TextAppearance_Material3_BodyLarge);
+        pct.setTextAppearance(R.style.TextAppearance_Osc_BodyLarge);
         pct.setPadding(dp(16), 0, dp(16), 0);
         pct.setText(String.format(Locale.KOREA, "%.0f%%", Settings.fontScale(c) * 100));
         smaller.setOnClickListener(v -> ((MainActivity) requireActivity()).changeFont(-1));
@@ -190,7 +190,7 @@ public class SettingsFragment extends Fragment {
         }
         TextView t = new TextView(requireContext());
         t.setText(title);
-        t.setTextAppearance(com.google.android.material.R.style.TextAppearance_Material3_TitleMedium);
+        t.setTextAppearance(R.style.TextAppearance_Osc_TitleMedium);
         t.setPadding(0, dp(16), 0, dp(4));
         root.addView(t);
     }
@@ -198,7 +198,7 @@ public class SettingsFragment extends Fragment {
     private TextView label(String text) {
         TextView t = new TextView(requireContext());
         t.setText(text);
-        t.setTextAppearance(com.google.android.material.R.style.TextAppearance_Material3_BodyMedium);
+        t.setTextAppearance(R.style.TextAppearance_Osc_BodyMedium);
         t.setPadding(0, dp(8), 0, dp(4));
         root.addView(t);
         return t;
@@ -214,10 +214,10 @@ public class SettingsFragment extends Fragment {
         texts.setOrientation(LinearLayout.VERTICAL);
         TextView t = new TextView(c);
         t.setText(title);
-        t.setTextAppearance(com.google.android.material.R.style.TextAppearance_Material3_BodyLarge);
+        t.setTextAppearance(R.style.TextAppearance_Osc_BodyLarge);
         TextView h = new TextView(c);
         h.setText(hint);
-        h.setTextAppearance(com.google.android.material.R.style.TextAppearance_Material3_BodySmall);
+        h.setTextAppearance(R.style.TextAppearance_Osc_BodySmall);
         texts.addView(t);
         texts.addView(h);
         row.addView(texts, new LinearLayout.LayoutParams(0, -2, 1));

@@ -190,12 +190,12 @@ final class StockAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder> {
             row.setPadding(dp(c, 12), dp(c, 10), dp(c, 12), dp(c, 10));
             bar = new View(c);
             row.addView(bar, new LinearLayout.LayoutParams(dp(c, 5), dp(c, 22)));
-            title = label(c, com.google.android.material.R.style.TextAppearance_Material3_TitleMedium);
-            title.setTypeface(android.graphics.Typeface.DEFAULT_BOLD);
+            title = label(c, R.style.TextAppearance_Osc_TitleMedium);
+            title.setTypeface(androidx.core.content.res.ResourcesCompat.getFont(c, R.font.noto_sans_kr_bold));
             LinearLayout.LayoutParams tl = new LinearLayout.LayoutParams(0, -2, 1);
             tl.leftMargin = dp(c, 10);
             row.addView(title, tl);
-            count = label(c, com.google.android.material.R.style.TextAppearance_Material3_LabelLarge);
+            count = label(c, R.style.TextAppearance_Osc_LabelLarge);
             count.setPadding(dp(c, 10), dp(c, 3), dp(c, 10), dp(c, 3));
             count.setTextColor(0xFFFFFFFF);
             row.addView(count);
@@ -233,9 +233,9 @@ final class StockAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder> {
             LinearLayout head = new LinearLayout(c);
             head.setGravity(Gravity.CENTER_VERTICAL);
             head.setPadding(dp(c, 10), 0, dp(c, 10), 0);
-            name = label(c, com.google.android.material.R.style.TextAppearance_Material3_TitleMedium);
-            value = label(c, com.google.android.material.R.style.TextAppearance_Material3_TitleMedium);
-            change = label(c, com.google.android.material.R.style.TextAppearance_Material3_BodyMedium);
+            name = label(c, R.style.TextAppearance_Osc_TitleMedium);
+            value = label(c, R.style.TextAppearance_Osc_TitleMedium);
+            change = label(c, R.style.TextAppearance_Osc_BodyMedium);
             head.addView(name, new LinearLayout.LayoutParams(0, -2, 1));
             head.addView(value);
             LinearLayout.LayoutParams gap = new LinearLayout.LayoutParams(-2, -2);
@@ -268,7 +268,7 @@ final class StockAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder> {
             LinearLayout box = new LinearLayout(c);
             box.setOrientation(LinearLayout.VERTICAL);
             box.setPadding(dp(c, 12), dp(c, 10), dp(c, 12), dp(c, 10));
-            TextView title = label(c, com.google.android.material.R.style.TextAppearance_Material3_TitleSmall);
+            TextView title = label(c, R.style.TextAppearance_Osc_TitleSmall);
             title.setText("오늘의 신호 · 누르면 해당 목록으로");
             box.addView(title);
             grid = new GridLayout(c);
@@ -289,11 +289,11 @@ final class StockAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder> {
                 TypedValue ripple = new TypedValue();
                 c.getTheme().resolveAttribute(android.R.attr.selectableItemBackground, ripple, true);
                 tile.setBackgroundResource(ripple.resourceId);
-                TextView count = label(c, com.google.android.material.R.style.TextAppearance_Material3_HeadlineSmall);
+                TextView count = label(c, R.style.TextAppearance_Osc_HeadlineSmall);
                 count.setText(String.valueOf(n));
                 count.setTextColor(n == 0 ? ContextCompat.getColor(c, R.color.flat)
                         : ContextCompat.getColor(c, k.buySide ? R.color.up : R.color.down));
-                TextView name = label(c, com.google.android.material.R.style.TextAppearance_Material3_BodySmall);
+                TextView name = label(c, R.style.TextAppearance_Osc_BodySmall);
                 name.setText(k.label + (Signals.alerting(c, k) ? " · 알림" : ""));
                 tile.addView(count);
                 tile.addView(name);
@@ -310,7 +310,9 @@ final class StockAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder> {
 
     final class Row extends RecyclerView.ViewHolder {
         final View head, detail, open;
-        final TextView name, sub, price, change, volume, info;
+        final TextView name, sub, price, change, volume;
+        /** Metrics, the day's signals, the indicator table and the chart legend, built in code. */
+        final LinearLayout info;
         final ChipGroup toggles;
         final LinearLayout charts;
         final List<ChartView> panels = new ArrayList<>();
@@ -368,12 +370,19 @@ final class StockAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder> {
         private void bindDetail(Stock s) {
             Context c = itemView.getContext();
             Rule.Config cfg = Settings.config(c);
-            StringBuilder t = new StringBuilder();
-            t.append("시가총액 ").append(compact(s.cap * 1e8)).append("원 · 20일 평균 거래대금 ")
-                    .append(compact(s.dv20)).append("원");
-            if (s.seq != null) t.append('\n').append(states(s, cfg));
-            t.append("\n차트: 두 손가락으로 확대 · 옆으로 밀어 이동 · 탭하거나 길게 눌러 값 보기 · 두 번 탭하면 처음으로");
-            info.setText(t);
+            info.removeAllViews();
+            info.addView(metrics(c, s));
+            List<Signals.Hit> hits = Signals.hits(c, s);
+            if (!hits.isEmpty()) {
+                ChipGroup today = flow(c);
+                for (Signals.Hit h : hits) {
+                    int color = ContextCompat.getColor(c, h.kind.buySide ? R.color.up : R.color.down);
+                    today.addView(tag(c, h.describe(), color, true));
+                }
+                info.addView(today, spaced(c, 10));
+            }
+            if (s.seq != null) info.addView(indicatorTable(c, s, cfg), spaced(c, 10));
+            info.addView(legend(c), spaced(c, 10));
             bindToggles(c);
             if (panels.isEmpty()) {
                 for (ChartView.Type type : ChartView.Type.values()) {
@@ -401,29 +410,174 @@ final class StockAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder> {
                     MAIN.post(() -> { if (stock != null && stock.ticker.equals(ticker)) bindCharts(b); });
                 } catch (Exception e) {
                     MAIN.post(() -> {
-                        if (stock != null && stock.ticker.equals(ticker)) info.append("\n차트를 불러오지 못했습니다: " + e.getMessage());
+                        if (stock == null || !stock.ticker.equals(ticker)) return;
+                        TextView err = label(c, R.style.TextAppearance_Osc_BodySmall);
+                        err.setText("차트를 불러오지 못했습니다: " + e.getMessage());
+                        info.addView(err);
                     });
                 }
             });
         }
 
-        /** One line per indicator: value, zone, and what happened on the signal day. */
-        private String states(Stock s, Rule.Config cfg) {
-            Rule.Snap p = s.prev(), l = s.last();
-            boolean[] g = Rule.golden(p, l, cfg), d = Rule.dead(p, l, cfg);
-            double[][] v = {{cfg.slow ? p.kSlow : p.kFast, cfg.slow ? l.kSlow : l.kFast},
-                    {p.rsi, l.rsi}, {p.cci, l.cci}};
-            double[][] zone = {{cfg.stochLo, cfg.stochHi}, {cfg.rsiLo, cfg.rsiHi}, {-cfg.cciLevel, cfg.cciLevel}};
-            StringBuilder b = new StringBuilder(Repo.asof).append(" 종가");
-            for (int j = 0; j < 3; j++) {
-                b.append('\n').append(Signals.NAMES[j]).append(' ')
-                        .append(String.format(Locale.KOREA, j == 2 ? "%.0f → %.0f" : "%.1f → %.1f", v[j][0], v[j][1]));
-                String event = zoneEvent(v[j][0], v[j][1], zone[j][0], zone[j][1]);
-                if (!event.isEmpty()) b.append(" · ").append(event);
-                if (g[j]) b.append(" · 골든크로스");
-                if (d[j]) b.append(" · 데드크로스");
+        // ---- detail pieces -----------------------------------------------------------------
+
+        private LinearLayout.LayoutParams spaced(Context c, int topDp) {
+            LinearLayout.LayoutParams lp = new LinearLayout.LayoutParams(-1, -2);
+            lp.topMargin = dp(c, topDp);
+            return lp;
+        }
+
+        private int muted(Context c) {
+            return com.google.android.material.color.MaterialColors.getColor(c,
+                    com.google.android.material.R.attr.colorOnSurfaceVariant, 0xFF666666);
+        }
+
+        private android.graphics.drawable.GradientDrawable rounded(int color, float radius) {
+            android.graphics.drawable.GradientDrawable d = new android.graphics.drawable.GradientDrawable();
+            d.setColor(color);
+            d.setCornerRadius(radius);
+            return d;
+        }
+
+        /** A soft rounded panel that groups related lines. */
+        private LinearLayout panel(Context c) {
+            LinearLayout box = new LinearLayout(c);
+            box.setOrientation(LinearLayout.VERTICAL);
+            box.setPadding(dp(c, 12), dp(c, 10), dp(c, 12), dp(c, 10));
+            int base = com.google.android.material.color.MaterialColors.getColor(c,
+                    com.google.android.material.R.attr.colorSurfaceVariant, 0xFFE7E0EC);
+            box.setBackground(rounded((base & 0x00FFFFFF) | 0x80000000, dp(c, 12)));
+            return box;
+        }
+
+        private ChipGroup flow(Context c) {
+            ChipGroup g = new ChipGroup(c);
+            g.setChipSpacingHorizontal(dp(c, 6));
+            g.setChipSpacingVertical(dp(c, 6));
+            return g;
+        }
+
+        /** A pill: solid for what counts today, tinted for context. */
+        private TextView tag(Context c, String text, int color, boolean strong) {
+            TextView t = label(c, R.style.TextAppearance_Osc_LabelMedium);
+            t.setText(text);
+            t.setPadding(dp(c, 9), dp(c, 3), dp(c, 9), dp(c, 3));
+            t.setTextColor(strong ? 0xFFFFFFFF : color);
+            t.setBackground(rounded(strong ? color : (color & 0x00FFFFFF) | 0x24000000, dp(c, 10)));
+            return t;
+        }
+
+        /** Market cap and liquidity side by side. */
+        private View metrics(Context c, Stock s) {
+            LinearLayout row = new LinearLayout(c);
+            String[][] items = {{"시가총액", compact(s.cap * 1e8) + "원"}, {"20일 평균 거래대금", compact(s.dv20) + "원"}};
+            for (String[] it : items) {
+                LinearLayout col = new LinearLayout(c);
+                col.setOrientation(LinearLayout.VERTICAL);
+                TextView k = label(c, R.style.TextAppearance_Osc_BodySmall);
+                k.setText(it[0]);
+                k.setTextColor(muted(c));
+                TextView v = label(c, R.style.TextAppearance_Osc_TitleMedium);
+                v.setText(it[1]);
+                col.addView(k);
+                col.addView(v);
+                row.addView(col, new LinearLayout.LayoutParams(0, -2, 1));
             }
-            return b.toString();
+            return row;
+        }
+
+        /** One row per indicator: name, yesterday → today, and what happened, as tags. */
+        private View indicatorTable(Context c, Stock s, Rule.Config cfg) {
+            LinearLayout box = panel(c);
+            TextView head = label(c, R.style.TextAppearance_Osc_LabelMedium);
+            head.setText(Repo.asof.replace('-', '.') + " 종가 · 전날 → 당일");
+            head.setTextColor(muted(c));
+            box.addView(head);
+            Rule.Snap p = s.prev(), l = s.last();
+            Rule.Config plain = new Rule.Config();
+            plain.slow = cfg.slow;
+            plain.stochBand = plain.rsiBand = false;
+            boolean[] g = Rule.golden(p, l, cfg), d = Rule.dead(p, l, cfg);
+            boolean[] pg = Rule.golden(p, l, plain), pd = Rule.dead(p, l, plain);
+            double[][] v = {{cfg.slow ? p.kSlow : p.kFast, cfg.slow ? l.kSlow : l.kFast}, {p.rsi, l.rsi}, {p.cci, l.cci}};
+            double[][] zone = {{cfg.stochLo, cfg.stochHi}, {cfg.rsiLo, cfg.rsiHi}, {-cfg.cciLevel, cfg.cciLevel}};
+            int up = ContextCompat.getColor(c, R.color.up), down = ContextCompat.getColor(c, R.color.down);
+            for (int j = 0; j < 3; j++) {
+                LinearLayout row = new LinearLayout(c);
+                row.setGravity(Gravity.CENTER_VERTICAL);
+                row.setPadding(0, dp(c, 8), 0, 0);
+                TextView name = label(c, R.style.TextAppearance_Osc_TitleSmall);
+                name.setText(j == 0 ? (cfg.slow ? "스토캐스틱" : "스토캐스틱 F") : Signals.NAMES[j]);
+                row.addView(name, new LinearLayout.LayoutParams(dp(c, 84), -2));
+                TextView value = label(c, R.style.TextAppearance_Osc_BodyMedium);
+                String fmt = j == 2 ? "%.0f → %.0f" : "%.1f → %.1f";
+                value.setText(String.format(Locale.KOREA, fmt, v[j][0], v[j][1]));
+                value.setTextColor(v[j][1] > v[j][0] ? up : v[j][1] < v[j][0] ? down : muted(c));
+                row.addView(value, new LinearLayout.LayoutParams(dp(c, 112), -2));
+                ChipGroup tags = flow(c);
+                String zoneText = zoneEvent(v[j][0], v[j][1], zone[j][0], zone[j][1]);
+                if (!zoneText.isEmpty()) {
+                    boolean event = zoneText.endsWith("진입") || zoneText.endsWith("탈출");
+                    tags.addView(tag(c, zoneText, zoneText.startsWith("과매도") ? up : down, event));
+                }
+                if (g[j]) tags.addView(tag(c, "골든크로스", up, true));
+                else if (j != 2 && pg[j]) tags.addView(tag(c, "골든크로스 · 조건 밖", up, false));
+                if (d[j]) tags.addView(tag(c, "데드크로스", down, true));
+                else if (j != 2 && pd[j]) tags.addView(tag(c, "데드크로스 · 조건 밖", down, false));
+                if (tags.getChildCount() == 0) {
+                    TextView none = label(c, R.style.TextAppearance_Osc_BodySmall);
+                    none.setText("변화 없음");
+                    none.setTextColor(muted(c));
+                    tags.addView(none);
+                }
+                row.addView(tags, new LinearLayout.LayoutParams(0, -2, 1));
+                box.addView(row);
+            }
+            return box;
+        }
+
+        /** What the marks on the charts mean, and how to move around them. */
+        private View legend(Context c) {
+            LinearLayout box = panel(c);
+            int up = ContextCompat.getColor(c, R.color.up), down = ContextCompat.getColor(c, R.color.down);
+            Object[][] lines = {
+                    {"▲▼", "3지표 일치 · 진한 세로 띠가 일치 구간"},
+                    {"△▽", "2지표 일치 · 연한 세로 띠"},
+                    {"●", "큰 점 · 신호가 되는 교차 (밴드 조건 충족)"},
+                    {"•", "작은 점 · 조건 밖의 교차 (참고용)"},
+                    {"○", "고리 · 과매도·과매수 선을 지난 곳"},
+            };
+            TextView head = label(c, R.style.TextAppearance_Osc_LabelMedium);
+            head.setText("차트 표시 · 빨강은 골든·과매도 쪽, 파랑은 데드·과매수 쪽");
+            head.setTextColor(muted(c));
+            box.addView(head);
+            for (Object[] line : lines) {
+                android.text.SpannableStringBuilder b = new android.text.SpannableStringBuilder();
+                String mark = (String) line[0];
+                int from = b.length();
+                b.append(mark.substring(0, 1));
+                b.setSpan(new android.text.style.ForegroundColorSpan(up), from, b.length(), 0);
+                if (mark.length() > 1) {
+                    from = b.length();
+                    b.append(mark.substring(1));
+                    b.setSpan(new android.text.style.ForegroundColorSpan(down), from, b.length(), 0);
+                } else {
+                    from = b.length();
+                    b.append(mark);
+                    b.setSpan(new android.text.style.ForegroundColorSpan(down), from, b.length(), 0);
+                }
+                b.append("  ").append((String) line[1]);
+                TextView t = label(c, R.style.TextAppearance_Osc_BodySmall);
+                t.setText(b);
+                t.setPadding(0, dp(c, 4), 0, 0);
+                box.addView(t);
+            }
+            TextView hint = label(c, R.style.TextAppearance_Osc_BodySmall);
+            hint.setText("두 손가락으로 확대 · 옆으로 밀어 이동 · 탭하거나 길게 눌러 값 보기 · 두 번 탭하면 처음으로");
+            hint.setTextColor(muted(c));
+            hint.setPadding(0, dp(c, 8), 0, 0);
+            box.addView(hint);
+            return box;
         }
 
         private String zoneEvent(double before, double now, double lo, double hi) {
@@ -432,8 +586,8 @@ final class StockAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder> {
             if (wasLow && !isLow) return "과매도 탈출";
             if (isHigh && !wasHigh) return "과매수 진입";
             if (wasHigh && !isHigh) return "과매수 탈출";
-            if (isLow) return "과매도";
-            if (isHigh) return "과매수";
+            if (isLow) return "과매도 구간";
+            if (isHigh) return "과매수 구간";
             return "";
         }
 
