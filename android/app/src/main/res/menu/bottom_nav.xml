@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<menu xmlns:android="http://schemas.android.com/apk/res/android">
+    <item android:id="@+id/tab_summary" android:icon="@drawable/ic_tab_summary" android:title="요약" />
+    <item android:id="@+id/tab_stocks" android:icon="@drawable/ic_tab_stocks" android:title="종목" />
+    <item android:id="@+id/tab_settings" android:icon="@drawable/ic_tab_settings" android:title="설정" />
+</menu>

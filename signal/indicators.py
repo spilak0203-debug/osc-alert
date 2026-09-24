@@ -22,12 +22,27 @@ RSI_LO, RSI_HI = 30, 70
 CCI_N, CCI_BAND = 20, 100
 
 
-def slow_stochastic(high, low, close, n=STOCH_N, d=STOCH_D):
-    """Slow %K = Fast %K의 d일 평균, Slow %D = Slow %K의 d일 평균."""
+def fast_stochastic(high, low, close, n=STOCH_N, d=STOCH_D):
+    """Fast %K = 원값, Fast %D = Fast %K의 d일 평균."""
     hh, ll = high.rolling(n).max(), low.rolling(n).min()
     fast_k = (close - ll) / (hh - ll).replace(0, np.nan) * 100
-    k = fast_k.rolling(d).mean()
+    return fast_k, fast_k.rolling(d).mean()
+
+
+def slow_stochastic(high, low, close, n=STOCH_N, d=STOCH_D):
+    """Slow %K = Fast %K의 d일 평균, Slow %D = Slow %K의 d일 평균."""
+    _, k = fast_stochastic(high, low, close, n, d)
     return k, k.rolling(d).mean()
+
+
+def series(frame):
+    """앱이 합치를 다시 판정하는 데 필요한 지표 일곱 개."""
+    h, l, c = frame['High'], frame['Low'], frame['Close']
+    fk, fd = fast_stochastic(h, l, c)
+    sk, sd = slow_stochastic(h, l, c)
+    r, rs = rsi(c)
+    return pd.DataFrame({'k_fast': fk, 'd_fast': fd, 'k_slow': sk, 'd_slow': sd,
+                         'rsi': r, 'rsi_sig': rs, 'cci': cci(h, l, c)}, index=frame.index)
 
 
 def cci(high, low, close, n=CCI_N):

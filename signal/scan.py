@@ -29,6 +29,7 @@ import requests
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 import indicators as ind  # noqa: E402
+import rule as rl  # noqa: E402
 
 ROOT = Path(__file__).resolve().parents[1]
 OUT = ROOT / 'signals'
@@ -77,6 +78,25 @@ def _get(url):
             time.sleep(1 + attempt * 2)
 
 
+def _num(v):
+    try:
+        return float(str(v).replace(',', ''))
+    except (TypeError, ValueError):
+        return float('nan')
+
+
+def quote(s):
+    """오늘 시세(종가·등락률·거래량). 일봉 API는 최근 봉의 전일 종가를 나중에 고치는 일이 있어
+    등락률이 어긋난다 — 알림에 쓰는 숫자는 시세 API 값을 쓴다."""
+    chg = _num(s.get('fluctuationsRatio'))
+    direction = (s.get('compareToPreviousPrice') or {}).get('code')
+    if direction in ('4', '5') and chg > 0:      # 하한·하락인데 부호가 없는 응답
+        chg = -chg
+    return dict(q_close=_num(s.get('closePriceRaw') or s.get('closePrice')), q_chg=chg,
+                q_vol=_num(s.get('accumulatedTradingVolumeRaw') or s.get('accumulatedTradingVolume')),
+                q_at=str(s.get('localTradedAt', ''))[:10])
+
+
 def universe():
     """오늘 시총 순위의 보통주. 우선주(코드 끝이 0이 아님)·ETF·리츠는 뺀다."""
     rows = []
@@ -89,7 +109,8 @@ def universe():
                 if not s['itemCode'].endswith('0') or s.get('stockEndType') != 'stock':
                     continue
                 rows.append(dict(ticker=s['itemCode'], name=s['stockName'], market=market,
-                                 market_cap=float(str(s['marketValue']).replace(',', ''))))
+                                 market_cap=float(str(s['marketValue']).replace(',', '')),
+                                 **quote(s)))
     frame = pd.DataFrame(rows).drop_duplicates('ticker')
     return frame.sort_values('market_cap', ascending=False).reset_index(drop=True)
 
@@ -162,6 +183,35 @@ def row_for(ticker, name, market, f, ev, day):
                            cci=bool(e.cci_gold or e.cci_dead)))
 
 
+SNAP_KEYS = ('k_fast', 'd_fast', 'k_slow', 'd_slow', 'rsi', 'rsi_sig', 'cci')
+
+
+def market_row(ticker, info, f, day):
+    """`market.json` 한 줄. 앱이 설정대로 합치를 다시 판정하도록 신호일과 그 전 봉의 지표를 싣는다.
+
+    지표는 소수 넷째 자리까지 — 교차 판정에서 두 선이 거의 붙어 있을 때 반올림이 결과를
+    뒤집지 않게 넉넉히 둔다. 신호일에 거래가 없던 종목도 목록에는 넣는다(지표는 비어 있음)."""
+    s = ind.series(f)
+    at = f.index.get_indexer([day])[0]
+    num = rl.clean_number
+    row = dict(t=ticker, n=info['name'], m='KS' if info['market'] == 'KOSPI' else 'KQ',
+               cap=num(info['market_cap'], 0))
+    closes = f.Close.dropna()
+    if info.get('q_at') == day.strftime('%Y-%m-%d') and np.isfinite(info.get('q_close', np.nan)):
+        # 시세 API가 신호일과 같은 날의 값이면 그걸 쓴다 (등락률이 증권사 화면과 같다).
+        row['close'], row['chg'], row['vol'] = num(info['q_close'], 0), num(info['q_chg'], 2), num(info['q_vol'], 0)
+    else:
+        row['close'] = num(closes.iloc[-1], 0) if len(closes) else None
+        row['chg'] = num((closes.iloc[-1] / closes.iloc[-2] - 1) * 100, 2) if len(closes) > 1 else None
+        row['vol'] = num(f.Volume.iloc[-1], 0)
+    dv20 = f.DollarVolume.rolling(20).mean().shift(1)
+    row['dv20'] = num(dv20.iloc[at], 0) if at >= 0 else None
+    if at >= 1:
+        for key in SNAP_KEYS:
+            row[key] = [num(s[key].iloc[at - 1], 4), num(s[key].iloc[at], 4)]
+    return row
+
+
 def run(limit=None, now=None, progress=print):
     now = now or now_seoul()
     uni = universe()
@@ -187,12 +237,14 @@ def run(limit=None, now=None, progress=print):
     last = pd.Series([f.index[-1] for f in frames.values()]).value_counts()
     day = last.index[0]
     info = uni.set_index('ticker')
-    rows = []
+    rows, market = [], []
     for t, f in frames.items():
         ev = ind.evaluate(f)
         r = row_for(t, info.at[t, 'name'], info.at[t, 'market'], f, ev, day)
         if r and (r['golden'] or r['dead']):
             rows.append(r)
+        market.append(market_row(t, info.loc[t], f, day))
+    market.sort(key=lambda r: -(r['cap'] or 0))
     golden = sorted([r for r in rows if r['golden']], key=lambda r: -(r['dv20'] or 0))
     dead = sorted([r for r in rows if r['dead']], key=lambda r: -(r['dv20'] or 0))
     return dict(
@@ -203,15 +255,21 @@ def run(limit=None, now=None, progress=print):
                    rsi='RSI(14) · 시그널(9) 교차 · 직전 RSI <30 / >70',
                    cci='CCI(20) · -100 상향 / +100 하향',
                    confluence='세 개가 같은 날 전부'),
-        golden=golden, dead=dead)
+        golden=golden, dead=dead), dict(
+        asof=day.strftime('%Y-%m-%d'),
+        generated=datetime.now(timezone.utc).isoformat(timespec='seconds'),
+        liquidity=LIQUIDITY, stocks=market)
 
 
-def save(payload):
+def save(payload, market):
     OUT.mkdir(parents=True, exist_ok=True)
     text = json.dumps(payload, ensure_ascii=False, indent=1)
     (OUT / 'latest.json').write_text(text, encoding='utf-8')
     (OUT / 'history').mkdir(exist_ok=True)
     (OUT / 'history' / f'{payload["asof"]}.json').write_text(text, encoding='utf-8')
+    # 전 종목 지표는 커밋하지 않는다(매일 수백 KB가 기록에 쌓인다). 워크플로가 릴리스 자산으로 올린다.
+    (OUT / 'market.json').write_text(json.dumps(market, ensure_ascii=False, separators=(',', ':')),
+                                     encoding='utf-8')
 
 
 def main():
@@ -219,9 +277,9 @@ def main():
     p.add_argument('--limit', type=int, help='시총 상위 N종목만 (시험용)')
     p.add_argument('--dry-run', action='store_true', help='파일로 저장하지 않는다')
     a = p.parse_args()
-    payload = run(limit=a.limit)
+    payload, market = run(limit=a.limit)
     if not a.dry_run:
-        save(payload)
+        save(payload, market)
     liquid = [r for r in payload['golden'] if r['liquid']]
     print(f"{payload['asof']} 종가 기준 · {payload['scanned']}/{payload['universe']}종목 "
           f"(실패 {payload['failed']})")

@@ -1,11 +1,12 @@
 name: daily-signal
 
-# 평일 장 마감 뒤 전 종목 일봉으로 오실레이터 3개 합치를 계산해 signals/latest.json에 커밋한다.
-# GitHub 예약 실행은 수 분~30분 늦을 수 있다. 두 번 걸어 두고, 결과가 같으면 커밋하지 않는다.
+# After the KRX close on weekdays: scan every stock, commit signals/latest.json, and upload the
+# per-stock indicator snapshot (market.json) to the `market-data` pre-release for the app.
+# Scheduled runs can start late, so there are two; an unchanged result makes no commit.
 on:
   schedule:
     - cron: '50 6 * * 1-5'   # 15:50 KST
-    - cron: '40 7 * * 1-5'   # 16:40 KST (첫 실행이 늦거나 실패했을 때)
+    - cron: '40 7 * * 1-5'   # 16:40 KST (in case the first run is late or fails)
   workflow_dispatch:
 
 permissions:
@@ -28,12 +29,22 @@ jobs:
       - run: pip install -r requirements.txt
       - run: python -m unittest discover -s tests -v
       - run: python signal/scan.py
+      - name: upload market data
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          # A pre-release never becomes "latest", so it does not interfere with app updates.
+          gh release view market-data >/dev/null 2>&1 || \
+            gh release create market-data --prerelease --title "Market data" \
+              --notes "Daily indicator snapshot for the app. Replaced after every scan."
+          gh release upload market-data signals/market.json --clobber
       - name: commit signals
         run: |
           git config user.name "osc-alert bot"
           git config user.email "osc-alert-bot@users.noreply.github.com"
-          git add signals
-          if git diff --cached --quiet; then echo "변경 없음"; exit 0; fi
+          git add signals/latest.json signals/history
+          if git diff --cached --quiet; then echo "no change"; exit 0; fi
           ASOF=$(python -c "import json;print(json.load(open('signals/latest.json',encoding='utf-8'))['asof'])")
           git commit -m "signals: ${ASOF}"
+          git pull --rebase
           git push
