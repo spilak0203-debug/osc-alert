@@ -7,12 +7,14 @@ updates itself from this repository's releases.
 
 | | Golden confluence (buy) | Dead confluence (sell) |
 |---|---|---|
-| Stochastic, Slow 5-3-3 | %K crosses above %D, previous %K < 20 | %K crosses below %D, previous %K > 80 |
-| RSI(14), signal(9) | RSI crosses above signal, previous RSI < 30 | RSI crosses below signal, previous RSI > 70 |
+| Stochastic, Slow 5-3-3 | %K crosses above %D | %K crosses below %D |
+| RSI(14), signal(9) | RSI crosses above its signal line | RSI crosses below its signal line |
 | CCI(20) | crosses above -100 | crosses below +100 |
 
-These are the defaults. In the app you can switch to fast stochastic, turn each band condition
-off or change its levels, allow the three crossings to be spread over up to 4 days, and add alerts
+These are the app's defaults: any crossing of the two lines counts. In settings you can add a band
+condition per indicator (e.g. the stochastic cross only counts after %K was below 20 / above 80,
+RSI after 30 / 70 — the rule the scan's `signals/latest.json` still uses), change the levels,
+switch to fast stochastic, allow the three crossings to be spread over up to 4 days, and add alerts
 for 2-of-3 matches and for entering or leaving oversold/overbought zones.
 
 ## How it works

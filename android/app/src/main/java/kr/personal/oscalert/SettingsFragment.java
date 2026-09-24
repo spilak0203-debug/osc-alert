@@ -92,11 +92,11 @@ public class SettingsFragment extends Fragment {
         choice(Settings.flag(c, Settings.STOCH_SLOW) ? "slow" : "fast",
                 new String[][]{{"slow", "Slow 5-3-3"}, {"fast", "Fast 5-3"}},
                 v -> prefs().edit().putBoolean(Settings.STOCH_SLOW, v.equals("slow")).apply());
-        toggle(Settings.STOCH_BAND, "밴드 조건 사용", "골든은 직전 %K가 과매도 아래, 데드는 과매수 위일 때만");
+        toggle(Settings.STOCH_BAND, "밴드 조건 사용", "끄면 %K·%D가 교차하기만 하면 신호. 켜면 과매도 아래·과매수 위에서 교차할 때만");
         numbers(Settings.STOCH_LO, "과매도", Settings.STOCH_HI, "과매수");
 
         section("RSI (14 · 시그널 9)");
-        toggle(Settings.RSI_BAND, "밴드 조건 사용", "골든은 직전 RSI가 과매도 아래, 데드는 과매수 위일 때만");
+        toggle(Settings.RSI_BAND, "밴드 조건 사용", "끄면 RSI·시그널선이 교차하기만 하면 신호. 켜면 과매도 아래·과매수 위에서 교차할 때만");
         numbers(Settings.RSI_LO, "과매도", Settings.RSI_HI, "과매수");
 
         section("CCI (20)");

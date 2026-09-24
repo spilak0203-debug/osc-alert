@@ -43,6 +43,9 @@ final class Settings {
     static boolean defaultFlag(String key) {
         switch (key) {
             case ALERT_2: case ALERT_ZONE_IN: case ALERT_ZONE_OUT: case PRE_MARKET: case QUIET_DAYS: case COPY_NAME:
+            // A plain crossing of the two lines is a cross signal; the oversold/overbought
+            // condition is optional.
+            case STOCH_BAND: case RSI_BAND:
                 return false;
             default:
                 return true;
@@ -67,6 +70,17 @@ final class Settings {
     static int integer(Context c, String key) {
         int fallback = key.equals(ZONE_NEED) ? 2 : 0;
         return prefs(c).getInt(key, fallback);
+    }
+
+    /**
+     * Earlier versions defaulted the stochastic and RSI band conditions to on. Switch existing
+     * installs to plain crossings once; later choices in settings are kept.
+     */
+    static void migrate(Context c) {
+        SharedPreferences p = prefs(c);
+        if (p.getBoolean("plainCrossDefaults", false)) return;
+        p.edit().putBoolean(STOCH_BAND, false).putBoolean(RSI_BAND, false)
+                .putBoolean("plainCrossDefaults", true).apply();
     }
 
     static String theme(Context c) {

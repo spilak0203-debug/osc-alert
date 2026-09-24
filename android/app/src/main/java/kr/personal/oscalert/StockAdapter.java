@@ -382,7 +382,7 @@ final class StockAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder> {
                 info.addView(today, spaced(c, 10));
             }
             if (s.seq != null) info.addView(indicatorTable(c, s, cfg), spaced(c, 10));
-            info.addView(legend(c), spaced(c, 10));
+            info.addView(legend(c, cfg), spaced(c, 10));
             bindToggles(c);
             if (panels.isEmpty()) {
                 for (ChartView.Type type : ChartView.Type.values()) {
@@ -537,14 +537,21 @@ final class StockAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder> {
         }
 
         /** What the marks on the charts mean, and how to move around them. */
-        private View legend(Context c) {
+        private View legend(Context c, Rule.Config cfg) {
             LinearLayout box = panel(c);
             int up = ContextCompat.getColor(c, R.color.up), down = ContextCompat.getColor(c, R.color.down);
-            Object[][] lines = {
+            // Small dots only exist when a band condition filters some crossings out.
+            boolean filtered = cfg.stochBand || cfg.rsiBand;
+            Object[][] lines = filtered ? new Object[][]{
                     {"▲▼", "3지표 일치 · 진한 세로 띠가 일치 구간"},
                     {"△▽", "2지표 일치 · 연한 세로 띠"},
                     {"●", "큰 점 · 신호가 되는 교차 (밴드 조건 충족)"},
-                    {"•", "작은 점 · 조건 밖의 교차 (참고용)"},
+                    {"•", "작은 점 · 밴드 조건 밖의 교차 (참고용)"},
+                    {"○", "고리 · 과매도·과매수 선을 지난 곳"},
+            } : new Object[][]{
+                    {"▲▼", "3지표 일치 · 진한 세로 띠가 일치 구간"},
+                    {"△▽", "2지표 일치 · 연한 세로 띠"},
+                    {"●", "점 · 골든크로스(빨강)·데드크로스(파랑). CCI는 ±기준선 돌파"},
                     {"○", "고리 · 과매도·과매수 선을 지난 곳"},
             };
             TextView head = label(c, R.style.TextAppearance_Osc_LabelMedium);
