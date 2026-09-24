@@ -84,7 +84,7 @@ jobs:
         with:
           channel: stable
           cache: true
-      - run: flutter build windows --release --build-name 2.99999 --build-number 99999 --dart-define=REPO=${{ github.repository }}
+      - run: flutter build windows --release --build-name 2.99999.0 --build-number 99999 --dart-define=REPO=${{ github.repository }}
       - name: smoke tour
         shell: pwsh
         run: |
@@ -116,6 +116,9 @@ jobs:
           Start-Sleep 15
           Get-ChildItem "$env:LOCALAPPDATA\Programs\OscAlert" | Select-Object Name
           Get-Process oscalert -ErrorAction SilentlyContinue | Select-Object Id, MainWindowTitle
+          $v = (Get-Item "$env:LOCALAPPDATA\Programs\OscAlert\oscalert.exe").VersionInfo.ProductVersion
+          "product version $v"
+          if ($v -ne '2.99999.0+99999') { exit 1 }
           if (-not (Get-Process oscalert -ErrorAction SilentlyContinue)) { exit 1 }
           Stop-Process -Name oscalert -Force
       - uses: actions/upload-artifact@v4

@@ -65,7 +65,8 @@ jobs:
         with:
           channel: stable
           cache: true
-      - run: flutter build windows --release --build-name 2.${{ github.run_number }} --build-number ${{ github.run_number }} --dart-define=REPO=${{ github.repository }}
+      # Windows needs a three-part version (major.minor.patch) or it falls back to 1.0.0.
+      - run: flutter build windows --release --build-name 2.${{ github.run_number }}.0 --build-number ${{ github.run_number }} --dart-define=REPO=${{ github.repository }}
       - name: installer
         shell: pwsh
         run: |
