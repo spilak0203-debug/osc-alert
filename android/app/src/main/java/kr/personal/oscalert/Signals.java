@@ -92,15 +92,11 @@ final class Signals {
     static Map<Kind, List<Stock>> group(Context ctx, List<Stock> stocks) {
         Rule.Config c = Settings.config(ctx);
         int need = Settings.integer(ctx, Settings.ZONE_NEED);
-        boolean liquidOnly = Settings.flag(ctx, Settings.LIQUID_ONLY);
         Map<Kind, List<Stock>> out = new EnumMap<>(Kind.class);
         for (Kind k : Kind.values()) out.put(k, new ArrayList<>());
         for (Stock s : stocks) {
-            for (Hit h : hits(s, c, need)) {
-                // Buying needs liquidity; selling never waits for it.
-                if (h.kind.buySide && liquidOnly && !s.liquid()) continue;
-                out.get(h.kind).add(s);
-            }
+            if (!Settings.passes(ctx, s)) continue;
+            for (Hit h : hits(s, c, need)) out.get(h.kind).add(s);
         }
         return out;
     }

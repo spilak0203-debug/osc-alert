@@ -39,7 +39,7 @@ import java.util.concurrent.Executors;
  * opens Naver; a long press copies the code (or the name, per settings).
  */
 final class StockAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder> {
-    private static final int HEADER = 0, ROW = 1, INDEX = 2, COUNTS = 3;
+    private static final int HEADER = 0, ROW = 1, INDEX = 2, COUNTS = 3, SECTION = 4;
     private static final ExecutorService LOADER = Executors.newFixedThreadPool(2);
     private static final Handler MAIN = new Handler(Looper.getMainLooper());
 
@@ -49,6 +49,17 @@ final class StockAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder> {
 
         Counts(Map<Signals.Kind, List<Stock>> groups) {
             this.groups = groups;
+        }
+    }
+
+    /** A dashboard section title: one signal kind and how many stocks it has. */
+    static final class Section {
+        final Signals.Kind kind;
+        final int count;
+
+        Section(Signals.Kind kind, int count) {
+            this.kind = kind;
+            this.count = count;
         }
     }
 
@@ -82,6 +93,7 @@ final class StockAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder> {
     public int getItemViewType(int position) {
         Object o = items.get(position);
         if (o instanceof String) return HEADER;
+        if (o instanceof Section) return SECTION;
         if (o instanceof MarketIndex) return INDEX;
         if (o instanceof Counts) return COUNTS;
         return ROW;
@@ -95,6 +107,7 @@ final class StockAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder> {
             case HEADER: return new RecyclerView.ViewHolder(inf.inflate(R.layout.item_header, parent, false)) {};
             case INDEX: return new IndexCard(parent.getContext());
             case COUNTS: return new CountsCard(parent.getContext());
+            case SECTION: return new SectionHeader(parent.getContext());
             default: return new Row(inf.inflate(R.layout.item_stock, parent, false));
         }
     }
@@ -105,6 +118,7 @@ final class StockAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder> {
         if (h instanceof Row) ((Row) h).bind((Stock) item);
         else if (h instanceof IndexCard) ((IndexCard) h).bind((MarketIndex) item);
         else if (h instanceof CountsCard) ((CountsCard) h).bind((Counts) item);
+        else if (h instanceof SectionHeader) ((SectionHeader) h).bind((Section) item);
         else ((TextView) h.itemView).setText((String) item);
     }
 
@@ -154,9 +168,55 @@ final class StockAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder> {
     private static MaterialCardView card(Context c) {
         MaterialCardView card = new MaterialCardView(c, null, com.google.android.material.R.attr.materialCardViewFilledStyle);
         RecyclerView.LayoutParams lp = new RecyclerView.LayoutParams(-1, -2);
-        lp.setMargins(dp(c, 12), dp(c, 6), dp(c, 12), dp(c, 6));
+        lp.setMargins(dp(c, 8), dp(c, 6), dp(c, 8), dp(c, 6));
         card.setLayoutParams(lp);
         return card;
+    }
+
+    // ---- section header --------------------------------------------------------------------
+
+    /** Coloured bar, bold title and a count badge, on a tinted strip so sections stand apart. */
+    static final class SectionHeader extends RecyclerView.ViewHolder {
+        final View bar;
+        final TextView title, count;
+
+        SectionHeader(Context c) {
+            super(new LinearLayout(c));
+            LinearLayout row = (LinearLayout) itemView;
+            row.setGravity(Gravity.CENTER_VERTICAL);
+            RecyclerView.LayoutParams lp = new RecyclerView.LayoutParams(-1, -2);
+            lp.setMargins(dp(c, 12), dp(c, 18), dp(c, 12), dp(c, 4));
+            row.setLayoutParams(lp);
+            row.setPadding(dp(c, 12), dp(c, 10), dp(c, 12), dp(c, 10));
+            bar = new View(c);
+            row.addView(bar, new LinearLayout.LayoutParams(dp(c, 5), dp(c, 22)));
+            title = label(c, com.google.android.material.R.style.TextAppearance_Material3_TitleMedium);
+            title.setTypeface(android.graphics.Typeface.DEFAULT_BOLD);
+            LinearLayout.LayoutParams tl = new LinearLayout.LayoutParams(0, -2, 1);
+            tl.leftMargin = dp(c, 10);
+            row.addView(title, tl);
+            count = label(c, com.google.android.material.R.style.TextAppearance_Material3_LabelLarge);
+            count.setPadding(dp(c, 10), dp(c, 3), dp(c, 10), dp(c, 3));
+            count.setTextColor(0xFFFFFFFF);
+            row.addView(count);
+        }
+
+        void bind(Section s) {
+            Context c = itemView.getContext();
+            int color = ContextCompat.getColor(c, s.kind.buySide ? R.color.up : R.color.down);
+            android.graphics.drawable.GradientDrawable strip = new android.graphics.drawable.GradientDrawable();
+            strip.setCornerRadius(dp(c, 10));
+            strip.setColor((color & 0x00FFFFFF) | 0x1A000000);
+            itemView.setBackground(strip);
+            bar.setBackgroundColor(color);
+            title.setText(s.kind.label);
+            title.setTextColor(color);
+            android.graphics.drawable.GradientDrawable pill = new android.graphics.drawable.GradientDrawable();
+            pill.setCornerRadius(dp(c, 12));
+            pill.setColor(color);
+            count.setBackground(pill);
+            count.setText(s.count + "종목");
+        }
     }
 
     // ---- index card ------------------------------------------------------------------------
@@ -169,9 +229,10 @@ final class StockAdapter extends RecyclerView.Adapter<RecyclerView.ViewHolder> {
             super(card(c));
             LinearLayout box = new LinearLayout(c);
             box.setOrientation(LinearLayout.VERTICAL);
-            box.setPadding(dp(c, 12), dp(c, 10), dp(c, 12), dp(c, 8));
+            box.setPadding(dp(c, 2), dp(c, 10), dp(c, 2), dp(c, 6));
             LinearLayout head = new LinearLayout(c);
             head.setGravity(Gravity.CENTER_VERTICAL);
+            head.setPadding(dp(c, 10), 0, dp(c, 10), 0);
             name = label(c, com.google.android.material.R.style.TextAppearance_Material3_TitleMedium);
             value = label(c, com.google.android.material.R.style.TextAppearance_Material3_TitleMedium);
             change = label(c, com.google.android.material.R.style.TextAppearance_Material3_BodyMedium);

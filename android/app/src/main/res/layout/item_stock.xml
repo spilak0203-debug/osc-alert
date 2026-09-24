@@ -80,7 +80,6 @@
         android:layout_width="match_parent"
         android:layout_height="wrap_content"
         android:orientation="vertical"
-        android:paddingHorizontal="12dp"
         android:paddingBottom="12dp"
         android:visibility="gone">
 
@@ -88,7 +87,7 @@
             android:id="@+id/info"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:paddingHorizontal="4dp"
+            android:paddingHorizontal="16dp"
             android:paddingBottom="4dp"
             android:textAppearance="?attr/textAppearanceBodyMedium" />
 
@@ -96,7 +95,7 @@
             android:id="@+id/toggles"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
-            android:paddingHorizontal="4dp" />
+            android:paddingHorizontal="16dp" />
 
         <LinearLayout
             android:id="@+id/charts"
@@ -109,6 +108,7 @@
             style="@style/Widget.Material3.Button.OutlinedButton"
             android:layout_width="match_parent"
             android:layout_height="wrap_content"
+            android:layout_marginHorizontal="16dp"
             android:layout_marginTop="8dp"
             android:text="네이버증권에서 차트 보기" />
     </LinearLayout>

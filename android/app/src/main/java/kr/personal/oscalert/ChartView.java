@@ -52,7 +52,7 @@ final class ChartView extends View {
 
     private final Paint line = new Paint(Paint.ANTI_ALIAS_FLAG), fill = new Paint(Paint.ANTI_ALIAS_FLAG);
     private final Paint text = new Paint(Paint.ANTI_ALIAS_FLAG), dash = new Paint(Paint.ANTI_ALIAS_FLAG);
-    private final int up, down, flat, onSurface, muted, grid, band, mainLine, sigLine;
+    private final int up, down, flat, onSurface, muted, grid, band, mainLine, sigLine, surface;
     private final int[] maColors;
 
     ChartView(Context c, Type type) {
@@ -69,6 +69,7 @@ final class ChartView extends View {
                 ContextCompat.getColor(c, R.color.ma60), ContextCompat.getColor(c, R.color.ma120)};
         onSurface = MaterialColors.getColor(c, com.google.android.material.R.attr.colorOnSurface, 0xFF222222);
         muted = MaterialColors.getColor(c, com.google.android.material.R.attr.colorOnSurfaceVariant, 0xFF666666);
+        surface = MaterialColors.getColor(c, com.google.android.material.R.attr.colorSurface, 0xFFFFFFFF);
         text.setTextSize(sp(11));
         line.setStyle(Paint.Style.STROKE);
         dash.setStyle(Paint.Style.STROKE);
@@ -206,9 +207,10 @@ final class ChartView extends View {
 
     private int from() { return to() - shown(); }
 
-    private float left() { return dp(4); }
+    private float left() { return dp(2); }
 
-    private float right() { return getWidth() - text.measureText("000,000,000") - dp(6); }
+    /** The plot runs to the edge; axis labels are drawn inside it on a translucent backing. */
+    private float right() { return getWidth() - dp(2); }
 
     private float top() { return sp(18); }
 
@@ -544,9 +546,8 @@ final class ChartView extends View {
         dash.setColor(active ? muted : grid);
         c.drawLine(left(), y(high, lo, hi), right(), y(high, lo, hi), dash);
         c.drawLine(left(), y(low, lo, hi), right(), y(low, lo, hi), dash);
-        text.setColor(muted);
-        c.drawText(fmtAxis(high), right() + dp(4), y(high, lo, hi) + sp(4), text);
-        c.drawText(fmtAxis(low), right() + dp(4), y(low, lo, hi) + sp(4), text);
+        axisLabel(c, fmtAxis(high), y(high, lo, hi));
+        axisLabel(c, fmtAxis(low), y(low, lo, hi), true);
     }
 
     private void gridAndAxis(Canvas c, double lo, double hi, int lines, boolean labels) {
@@ -558,8 +559,8 @@ final class ChartView extends View {
             float yy = y(v, lo, hi);
             c.drawLine(left(), yy, right(), yy, line);
             if (labels) {
-                text.setColor(muted);
-                c.drawText(fmtAxis(v), right() + dp(4), yy + sp(4), text);
+                axisLabel(c, fmtAxis(v), yy);
+
             }
         }
     }
@@ -574,8 +575,26 @@ final class ChartView extends View {
         for (double v = Math.ceil(lo / step) * step; v < hi; v += step) {
             float yy = y(v, lo, hi);
             c.drawLine(left(), yy, right(), yy, line);
-            c.drawText(fmtAxis(v), right() + dp(4), yy + sp(4), text);
+            axisLabel(c, fmtAxis(v), yy);
         }
+    }
+
+    /** A value label at the right edge, just above its line, readable over candles and lines. */
+    private void axisLabel(Canvas c, String s, float yy) {
+        axisLabel(c, s, yy, false);
+    }
+
+    /** `below` puts the label under its line (used for the lower band so it never sits on the dashes). */
+    private void axisLabel(Canvas c, String s, float yy, boolean below) {
+        float w = text.measureText(s), h = sp(11);
+        float x1 = right() - w - dp(4), y1 = below ? yy + h + dp(2) : yy - dp(2);
+        if (!below && y1 - h < top()) y1 = yy + h + dp(2);        // no room above: put it below
+        if (below && y1 > bottom()) y1 = yy - dp(2);
+        fill.setStyle(Paint.Style.FILL);
+        fill.setColor((surface & 0x00FFFFFF) | 0xCC000000);
+        c.drawRect(x1 - dp(2), y1 - h, right() - dp(1), y1 + dp(2), fill);
+        text.setColor(muted);
+        c.drawText(s, x1, y1, text);
     }
 
     private void polyline(Canvas c, double[] v, double lo, double hi, int color, float width) {

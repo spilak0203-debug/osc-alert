@@ -50,7 +50,6 @@ public class SettingsFragment extends Fragment {
         toggle(Settings.ALERT_ZONE_IN, "과매도·과매수 진입 알림", "아래 '구간 판단 지표 수' 이상이 구간에 새로 들어온 날");
         toggle(Settings.ALERT_ZONE_OUT, "과매도·과매수 탈출 알림", "구간에 있던 지표가 빠져나온 날");
         toggle(Settings.PRE_MARKET, "장 시작 전에도 알림", "다음 거래일 08시대에 같은 알림을 한 번 더");
-        toggle(Settings.LIQUID_ONLY, "매수 쪽은 거래대금 5억 이상만", "20일 평균 거래대금 기준 · 매도 쪽은 항상 전부");
         toggle(Settings.QUIET_DAYS, "신호 없는 날에도 알림", "켜진 알림 종류에 맞는 종목이 없다는 알림");
 
         label("알림 방식");
@@ -66,6 +65,18 @@ public class SettingsFragment extends Fragment {
             int n = Notifier.test(c);
             Toast.makeText(c, "테스트 알림 " + n + "개를 보냈습니다", Toast.LENGTH_SHORT).show();
         });
+
+        section("종목 필터");
+        label("대시보드·종목 탭·알림에 모두 적용됩니다");
+        label("시장");
+        choice(Settings.market(c), new String[][]{{"all", "전체"}, {"코스피", "코스피"}, {"코스닥", "코스닥"}},
+                v -> prefs().edit().putString(Settings.FILTER_MARKET, v).apply());
+        label("20일 평균 거래대금 최소");
+        choice(amount(Settings.FILTER_DV), new String[][]{{"0", "없음"}, {"1", "1억"}, {"5", "5억"}, {"10", "10억"}, {"50", "50억"}},
+                v -> prefs().edit().putFloat(Settings.FILTER_DV, Float.parseFloat(v)).apply());
+        label("시가총액 최소");
+        choice(amount(Settings.FILTER_CAP), new String[][]{{"0", "없음"}, {"500", "500억"}, {"1000", "1천억"}, {"5000", "5천억"}, {"10000", "1조"}},
+                v -> prefs().edit().putFloat(Settings.FILTER_CAP, Float.parseFloat(v)).apply());
 
         section("일치 판단");
         label("허용 기간 · 신호일과 그 앞 며칠 안에 교차하면 같이 센다");
@@ -93,6 +104,12 @@ public class SettingsFragment extends Fragment {
         numbers(Settings.CCI_LEVEL, "기준선 (±)", null, null);
 
         section("화면");
+        label("테마");
+        choice(Settings.theme(c), new String[][]{{"system", "기기 설정"}, {"light", "라이트"}, {"dark", "다크"}},
+                v -> {
+                    prefs().edit().putString(Settings.THEME, v).apply();
+                    Settings.applyTheme(requireContext());
+                });
         label("글자 크기");
         LinearLayout font = new LinearLayout(c);
         font.setOrientation(LinearLayout.HORIZONTAL);
@@ -210,6 +227,10 @@ public class SettingsFragment extends Fragment {
         row.addView(sw);
         row.setOnClickListener(v -> sw.toggle());
         root.addView(row);
+    }
+
+    private String amount(String key) {
+        return String.format(Locale.ROOT, "%.0f", Settings.prefs(requireContext()).getFloat(key, 0));
     }
 
     interface Saver {

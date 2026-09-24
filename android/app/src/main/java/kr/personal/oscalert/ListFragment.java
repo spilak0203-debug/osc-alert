@@ -36,7 +36,7 @@ public class ListFragment extends Fragment implements Repo.Listener {
     private TextView status;
     private View progress;
     private String query = "";
-    private final Map<Signals.Kind, String> headers = new EnumMap<>(Signals.Kind.class);
+    private final Map<Signals.Kind, StockAdapter.Section> headers = new EnumMap<>(Signals.Kind.class);
 
     static ListFragment create(boolean summary) {
         ListFragment f = new ListFragment();
@@ -127,21 +127,23 @@ public class ListFragment extends Fragment implements Repo.Listener {
             headers.clear();
             for (Map.Entry<Signals.Kind, List<Stock>> e : groups.entrySet()) {
                 if (e.getValue().isEmpty()) continue;
-                String header = e.getKey().label + " · " + e.getValue().size() + "종목";
+                StockAdapter.Section header = new StockAdapter.Section(e.getKey(), e.getValue().size());
                 headers.put(e.getKey(), header);
                 items.add(header);
                 items.addAll(e.getValue());
             }
-            if (Settings.flag(requireContext(), Settings.LIQUID_ONLY)) {
-                items.add("매수 쪽 신호는 20일 평균 거래대금 5억 이상만 표시합니다");
-            }
+            String filter = Settings.filterSummary(requireContext());
+            if (!filter.isEmpty()) s.append(s.length() > 0 ? "\n" : "").append("필터: ").append(filter).append(" · 설정 탭에서 변경");
         } else {
             int shown = 0;
             for (Stock st : stocks) {
+                if (!Settings.passes(requireContext(), st)) continue;
                 if (!query.isEmpty() && !st.name.toLowerCase(Locale.ROOT).contains(query) && !st.ticker.contains(query)) continue;
                 items.add(st);
                 shown++;
             }
+            String filter = Settings.filterSummary(requireContext());
+            if (!filter.isEmpty()) s.append(s.length() > 0 ? "\n" : "").append("필터: ").append(filter).append(" · ").append(shown).append("종목");
             if (!query.isEmpty()) s.append(s.length() > 0 ? "\n" : "").append("검색 결과 ").append(shown).append("종목");
             else s.append(s.length() > 0 ? "\n" : "").append("길게 누르면 ")
                     .append(Settings.flag(requireContext(), Settings.COPY_NAME) ? "종목명" : "종목코드").append(" 복사");
