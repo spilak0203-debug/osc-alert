@@ -7,6 +7,7 @@ import 'package:flutter/material.dart';
 import '../core/repo.dart';
 import '../core/settings.dart';
 import '../core/signals.dart' as signals;
+import '../platform/app_update.dart';
 import '../platform/notifier.dart';
 import 'home.dart';
 import 'settings_page.dart';
@@ -136,5 +137,10 @@ class Tour {
     Notifier.tapped.value = signals.Kind.dead3;
     await _pause(1500);
     await shot('9-notification-jump');
+
+    // The bar an update download shows (values only — nothing is downloaded).
+    AppUpdate.progress.value = (5767168, 18874368);
+    await shot('10-update-progress');
+    AppUpdate.progress.value = null;
   }
 }

@@ -21,6 +21,7 @@ import java.net.HttpURLConnection;
 import java.net.URL;
 import java.security.MessageDigest;
 import java.util.ArrayList;
+import java.util.Arrays;
 import java.util.HashMap;
 import java.util.Map;
 import java.util.Set;
@@ -40,6 +41,7 @@ public class MainActivity extends FlutterActivity {
     private static final String ACTION = "kr.personal.oscalert.INSTALL_RESULT";
     private static volatile boolean installing;
     private BroadcastReceiver installResult;
+    private MethodChannel channel;
 
     @Override
     protected void onCreate(Bundle state) {
@@ -75,7 +77,8 @@ public class MainActivity extends FlutterActivity {
     @Override
     public void configureFlutterEngine(@NonNull FlutterEngine engine) {
         super.configureFlutterEngine(engine);
-        new MethodChannel(engine.getDartExecutor().getBinaryMessenger(), CHANNEL).setMethodCallHandler(this::handle);
+        channel = new MethodChannel(engine.getDartExecutor().getBinaryMessenger(), CHANNEL);
+        channel.setMethodCallHandler(this::handle);
     }
 
     private void handle(MethodCall call, MethodChannel.Result result) {
@@ -199,8 +202,9 @@ public class MainActivity extends FlutterActivity {
                     sessionId = installer.createSession(new PackageInstaller.SessionParams(
                             PackageInstaller.SessionParams.MODE_FULL_INSTALL));
                     MessageDigest digest = MessageDigest.getInstance("SHA-256");
+                    long size = c.getContentLengthLong();
                     try (PackageInstaller.Session session = installer.openSession(sessionId)) {
-                        long total = 0;
+                        long total = 0, reported = 0;
                         // The installer refuses to commit while the write stream is open ("Files still open").
                         try (InputStream in = c.getInputStream(); OutputStream out = session.openWrite("app", 0, -1)) {
                             byte[] buf = new byte[65536];
@@ -210,7 +214,13 @@ public class MainActivity extends FlutterActivity {
                                 digest.update(buf, 0, n);
                                 total += n;
                                 if (total > 200_000_000L) throw new IOException("설치 파일이 너무 큽니다");
+                                // Tell Dart every 256 KB for the progress bar.
+                                if (total - reported >= 262_144) {
+                                    reported = total;
+                                    progress(total, size);
+                                }
                             }
+                            progress(total, size);
                             session.fsync(out);
                         }
                         if (total == 0) throw new IOException("설치 파일을 받지 못했습니다");
@@ -237,5 +247,12 @@ public class MainActivity extends FlutterActivity {
             String message = error;
             runOnUiThread(() -> result.success(message));
         }, "app-update").start();
+    }
+
+    /** Bytes of the update received so far and the total (-1 if the server did not say). */
+    private void progress(long got, long size) {
+        runOnUiThread(() -> {
+            if (channel != null) channel.invokeMethod("installProgress", Arrays.asList(got, size));
+        });
     }
 }

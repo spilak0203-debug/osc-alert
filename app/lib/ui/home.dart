@@ -100,7 +100,10 @@ class HomeState extends State<Home> {
       final body = IndexedStack(index: tab, children: pages);
       return Scaffold(
         appBar: _topBar(context),
-        body: wide ? _wideBody(context, body) : body,
+        body: Column(children: [
+          const _UpdateProgress(),
+          Expanded(child: wide ? _wideBody(context, body) : body),
+        ]),
         bottomNavigationBar: wide ? null : _BottomBar(index: tab, onTap: show),
       );
     });
@@ -166,6 +169,38 @@ class HomeState extends State<Home> {
             : _DetailPane(stock: selected!),
       ),
     ]);
+  }
+}
+
+/// Under the top bar while an app update downloads: percent, megabytes and a progress bar.
+class _UpdateProgress extends StatelessWidget {
+  const _UpdateProgress();
+
+  @override
+  Widget build(BuildContext context) {
+    return ValueListenableBuilder(
+      valueListenable: AppUpdate.progress,
+      builder: (context, p, _) {
+        if (p == null) return const SizedBox.shrink();
+        final (got, size) = p;
+        final cs = Theme.of(context).colorScheme;
+        String mb(int bytes) => (bytes / 1048576).toStringAsFixed(1);
+        final text = size > 0
+            ? '업데이트 받는 중 · ${got * 100 ~/ size}% (${mb(got)} / ${mb(size)}MB)'
+            : '업데이트 받는 중 · ${mb(got)}MB';
+        return Material(
+          color: cs.surfaceContainerHigh,
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(16, 10, 16, 12),
+            child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+              Text(text, style: Theme.of(context).textTheme.bodyMedium),
+              const SizedBox(height: 8),
+              LinearProgressIndicator(value: size > 0 ? got / size : null, borderRadius: BorderRadius.circular(4)),
+            ]),
+          ),
+        );
+      },
+    );
   }
 }
 

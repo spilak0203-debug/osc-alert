@@ -20,10 +20,22 @@ class Native {
     if (Platform.isAndroid) await _ch.invokeMethod('cancelLegacyWork');
   }
 
-  /// Streams the APK into a PackageInstaller session. Returns an error message, or null once
-  /// the system's confirmation screen is on its way.
-  static Future<String?> installApk(String url, String? sha256) =>
-      _ch.invokeMethod<String>('installApk', {'url': url, 'sha256': sha256});
+  /// Streams the APK into a PackageInstaller session, reporting bytes received and the total
+  /// (0 if unknown). Returns an error message, or null once the system's confirmation screen is
+  /// on its way.
+  static Future<String?> installApk(String url, String? sha256, void Function(int got, int size) onProgress) async {
+    _ch.setMethodCallHandler((call) async {
+      if (call.method != 'installProgress') return;
+      final a = call.arguments as List;
+      final size = (a[1] as num).toInt();
+      onProgress((a[0] as num).toInt(), size < 0 ? 0 : size);
+    });
+    try {
+      return await _ch.invokeMethod<String>('installApk', {'url': url, 'sha256': sha256});
+    } finally {
+      _ch.setMethodCallHandler(null);
+    }
+  }
 
   /// Android 14+: the system's Material You roles, the same colours the Java app got from
   /// DynamicColors. Null elsewhere.

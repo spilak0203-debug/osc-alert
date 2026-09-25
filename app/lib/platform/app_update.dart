@@ -1,5 +1,6 @@
 import 'dart:io';
 
+import 'package:flutter/foundation.dart';
 import 'package:package_info_plus/package_info_plus.dart';
 import 'package:path_provider/path_provider.dart';
 import 'package:http/http.dart' as http;
@@ -21,6 +22,9 @@ class AppUpdate {
   static int versionCode = 0;
   static String versionName = '';
   static bool _running = false;
+
+  /// While an update downloads: bytes received and the total (0 if unknown). Null otherwise.
+  static final progress = ValueNotifier<(int, int)?>(null);
 
   static Future<void> init() async {
     final info = await PackageInfo.fromPlatform();
@@ -59,23 +63,40 @@ class AppUpdate {
       return;
     }
     _running = true;
-    Toaster.show('업데이트를 받는 중입니다…');
+    progress.value = (0, 0);
     try {
       if (Platform.isAndroid) {
-        final error = await Native.installApk(r.url, r.sha256);
+        final error = await Native.installApk(r.url, r.sha256, (got, size) => progress.value = (got, size));
         if (error != null) Toaster.show(error, long: true);
       } else {
         // Windows: download the installer and run it quietly; it closes this app and starts the new one.
-        final res = await http.get(Uri.parse(r.url));
-        if (res.statusCode != 200) throw NetException('서버 응답 ${res.statusCode}');
         final file = File('${(await getTemporaryDirectory()).path}/osc-alert-setup-${r.code}.exe');
-        await file.writeAsBytes(res.bodyBytes);
+        final client = http.Client();
+        try {
+          final res = await client.send(http.Request('GET', Uri.parse(r.url)));
+          if (res.statusCode != 200) throw NetException('서버 응답 ${res.statusCode}');
+          final size = res.contentLength ?? 0;
+          final sink = file.openWrite();
+          var got = 0;
+          try {
+            await for (final chunk in res.stream) {
+              sink.add(chunk);
+              got += chunk.length;
+              progress.value = (got, size);
+            }
+          } finally {
+            await sink.close();
+          }
+        } finally {
+          client.close();
+        }
         await Process.start(file.path, ['/SILENT', '/CLOSEAPPLICATIONS', '/RESTARTAPPLICATIONS'], mode: ProcessStartMode.detached);
       }
     } catch (e) {
       Toaster.show('$e', long: true);
     } finally {
       _running = false;
+      progress.value = null;
     }
   }
 }
