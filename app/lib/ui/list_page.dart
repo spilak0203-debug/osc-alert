@@ -1,3 +1,6 @@
+import 'dart:async';
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 import 'package:scrollable_positioned_list/scrollable_positioned_list.dart';
 
@@ -63,6 +66,16 @@ class ListPageState extends State<ListPage> {
   /// Space above a section title's strip in the list, and above the pinned one.
   static const double _headerGap = 18, _pinnedGap = 4;
 
+  /// The scroll bar on the right: where its thumb is (0..1), whether it is showing (while the
+  /// list moves, and always on Windows), and the bubble beside it — the section (or stock) at
+  /// that point — while it is dragged. Notifiers, so moving it does not rebuild the list.
+  final _thumbAt = ValueNotifier<double>(0);
+  final _barShown = ValueNotifier<bool>(false);
+  final _bubble = ValueNotifier<String?>(null);
+  Timer? _barHide;
+  int _visible = 1;
+  static const double _thumbHeight = 48;
+
   /// A group to scroll to once it is on the list (the data may still be loading).
   signals.Kind? _pendingJump;
 
@@ -76,6 +89,12 @@ class ListPageState extends State<ListPage> {
     final shown = _positions.itemPositions.value.where((p) => p.itemTrailingEdge > 0).toList()
       ..sort((a, b) => a.index.compareTo(b.index));
     if (shown.isEmpty) return;
+    _visible = shown.length;
+    // While the bar is dragged the thumb follows the finger, not the list.
+    if (_bubble.value == null) {
+      _thumbAt.value = _fraction(shown);
+      _showBar();
+    }
     final far = shown.first.index > 4;
     final (pinned, shift) = widget.summary ? _pin(shown) : (-1, 0.0);
     if (far != _far || pinned != _pinned || shift != _pinnedShift) {
@@ -85,6 +104,53 @@ class ListPageState extends State<ListPage> {
         _pinnedShift = shift;
       });
     }
+  }
+
+  /// How far down the list the top of the screen is, by items (0..1).
+  double _fraction(List<ItemPosition> shown) {
+    final first = shown.first, last = shown.last;
+    if (last.index >= _list.length - 1 && last.itemTrailingEdge <= 1.0) return first.index == 0 && first.itemLeadingEdge >= 0 ? 0 : 1;
+    final span = first.itemTrailingEdge - first.itemLeadingEdge;
+    final at = first.index + (span > 0 ? (-first.itemLeadingEdge / span).clamp(0.0, 1.0) : 0.0);
+    return (at / math.max(1, _list.length - shown.length)).clamp(0.0, 1.0);
+  }
+
+  void _showBar() {
+    _barShown.value = true;
+    _barHide?.cancel();
+    _barHide = Timer(const Duration(milliseconds: 1500), () => _barShown.value = false);
+  }
+
+  /// Dragging the bar: jump to the matching item and name where that is.
+  void _dragBar(double y, double track) {
+    final f = ((y - _thumbHeight / 2) / track).clamp(0.0, 1.0);
+    _thumbAt.value = f;
+    if (_list.isEmpty) return;
+    final i = (f * math.max(0, _list.length - _visible)).round().clamp(0, _list.length - 1);
+    if (_items.isAttached) _items.jumpTo(index: i);
+    _bubble.value = _labelAt(i);
+    _showBar();
+  }
+
+  void _dropBar() {
+    _bubble.value = null;
+    _showBar();
+  }
+
+  /// Summary: the section the item is in. Stocks tab: the stock at that point.
+  String _labelAt(int i) {
+    if (widget.summary) {
+      for (var j = i; j >= 0; j--) {
+        final o = _list[j];
+        if (o is _Section) return o.kind.label;
+      }
+      return '지수 · 오늘의 신호';
+    }
+    for (var j = i; j < _list.length; j++) {
+      final o = _list[j];
+      if (o is Stock) return o.name;
+    }
+    return '';
   }
 
   /// The section whose rows are at the top once its own title has scrolled under the pinned
@@ -110,6 +176,10 @@ class ListPageState extends State<ListPage> {
 
   @override
   void dispose() {
+    _barHide?.cancel();
+    _thumbAt.dispose();
+    _barShown.dispose();
+    _bubble.dispose();
     _search.dispose();
     for (final g in _indexGroups.values) {
       g.dispose();
@@ -141,6 +211,13 @@ class ListPageState extends State<ListPage> {
 
   void scrollToIndex(int index, {double alignment = 0}) {
     if (_items.isAttached) _items.jumpTo(index: index, alignment: alignment);
+  }
+
+  /// Holds the scroll bar `fraction` of the way down as if dragged there; null lets go.
+  void holdBar(double? fraction) {
+    if (fraction == null) return _dropBar();
+    final track = math.max(1.0, _viewport - _thumbHeight);
+    _dragBar(fraction * track + _thumbHeight / 2, track);
   }
 
   /// Moves the list by `pixels` (positive is down).
@@ -188,11 +265,18 @@ class ListPageState extends State<ListPage> {
       items.addAll(repo.indices);
       final groups = signals.group(stocks);
       items.add(_Counts(groups));
-      // Favourites lead each group; the sort is stable so the rest keep their order.
+      // Within a group: the group's own order first (volume-surge pairs last among the 2-signal
+      // overlaps), then favourites; the sort is stable so the rest keep their order.
       final favs = st.favorites();
       for (final e in groups.entries) {
         if (e.value.isEmpty) continue;
-        final group = [...e.value.where((x) => favs.contains(x.ticker)), ...e.value.where((x) => !favs.contains(x.ticker))];
+        int key(Stock x) => signals.rank(e.key, x) * 2 + (favs.contains(x.ticker) ? 0 : 1);
+        final indexed = [for (var i = 0; i < e.value.length; i++) (i, e.value[i])]
+          ..sort((a, b) {
+            final c = key(a.$2).compareTo(key(b.$2));
+            return c != 0 ? c : a.$1.compareTo(b.$1);
+          });
+        final group = [for (final x in indexed) x.$2];
         items.add(_Section(e.key, group.length));
         items.addAll(group);
       }
@@ -297,14 +381,18 @@ class ListPageState extends State<ListPage> {
             return Stack(children: [
               RefreshIndicator(
                 onRefresh: () => repo.refresh(!widget.summary),
-                child: ScrollablePositionedList.builder(
-                  itemScrollController: _items,
-                  itemPositionsListener: _positions,
-                  scrollOffsetController: _offsets,
-                  physics: const AlwaysScrollableScrollPhysics(),
-                  padding: const EdgeInsets.only(bottom: 16),
-                  itemCount: items.length,
-                  itemBuilder: (context, i) => _item(context, items[i]),
+                // Our own bar replaces the platform's.
+                child: ScrollConfiguration(
+                  behavior: ScrollConfiguration.of(context).copyWith(scrollbars: false),
+                  child: ScrollablePositionedList.builder(
+                    itemScrollController: _items,
+                    itemPositionsListener: _positions,
+                    scrollOffsetController: _offsets,
+                    physics: const AlwaysScrollableScrollPhysics(),
+                    padding: const EdgeInsets.only(bottom: 16),
+                    itemCount: items.length,
+                    itemBuilder: (context, i) => _item(context, items[i]),
+                  ),
                 ),
               ),
               if (pinned != null)
@@ -319,6 +407,7 @@ class ListPageState extends State<ListPage> {
                     child: _sectionHeader(context, pinned, margin: const EdgeInsets.symmetric(horizontal: 12)),
                   ),
                 ),
+              Positioned.fill(child: _scrollBar(context, box.maxHeight)),
             ]);
           }),
         ),
@@ -344,6 +433,77 @@ class ListPageState extends State<ListPage> {
         ),
       ),
     ]);
+  }
+
+  /// A thin thumb on the right edge that can be grabbed; while dragged it widens and a bubble
+  /// beside it names the section (summary) or stock (stocks tab) at that point.
+  Widget _scrollBar(BuildContext context, double height) {
+    final cs = Theme.of(context).colorScheme;
+    final t = Theme.of(context).textTheme;
+    final desktop = Theme.of(context).platform == TargetPlatform.windows;
+    final track = math.max(1.0, height - _thumbHeight);
+    return ListenableBuilder(
+      listenable: Listenable.merge([_thumbAt, _barShown, _bubble]),
+      builder: (context, _) {
+        final label = _bubble.value;
+        final dragging = label != null;
+        final active = dragging || _barShown.value;
+        final top = _thumbAt.value * track;
+        return Stack(children: [
+          Positioned(
+            top: 0,
+            bottom: 0,
+            right: 0,
+            width: 18,
+            child: IgnorePointer(
+              ignoring: !(active || desktop),
+              child: GestureDetector(
+                behavior: HitTestBehavior.opaque,
+                onVerticalDragStart: (d) => _dragBar(d.localPosition.dy, track),
+                onVerticalDragUpdate: (d) => _dragBar(d.localPosition.dy, track),
+                onVerticalDragEnd: (_) => _dropBar(),
+                onVerticalDragCancel: _dropBar,
+                child: AnimatedOpacity(
+                  opacity: active ? 1 : (desktop ? 0.4 : 0),
+                  duration: const Duration(milliseconds: 200),
+                  child: Stack(children: [
+                    Positioned(
+                      top: top,
+                      right: 3,
+                      child: AnimatedContainer(
+                        duration: const Duration(milliseconds: 120),
+                        width: dragging ? 8 : 5,
+                        height: _thumbHeight,
+                        decoration: BoxDecoration(
+                          color: dragging ? cs.primary : cs.onSurfaceVariant.withAlpha(0xA0),
+                          borderRadius: BorderRadius.circular(4),
+                        ),
+                      ),
+                    ),
+                  ]),
+                ),
+              ),
+            ),
+          ),
+          if (dragging && label.isNotEmpty)
+            Positioned(
+              top: (top + _thumbHeight / 2 - 18).clamp(0.0, math.max(0.0, height - 36)),
+              right: 26,
+              child: IgnorePointer(
+                child: Material(
+                  elevation: 3,
+                  color: cs.primary,
+                  borderRadius: BorderRadius.circular(18),
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 14, vertical: 8),
+                    child: Text(label, style: t.titleSmall!.copyWith(color: cs.onPrimary, fontWeight: FontWeight.w700)),
+                  ),
+                ),
+              ),
+            ),
+        ]);
+      },
+    );
   }
 
   /// Stocks without a value for the sort key go last; ties fall back to market cap.

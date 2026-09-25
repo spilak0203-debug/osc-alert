@@ -13,7 +13,9 @@ import 'signals.dart' as signals;
 import 'stock.dart';
 
 const repoName = String.fromEnvironment('REPO', defaultValue: 'spilak0203-debug/osc-alert');
-const marketUrl = 'https://github.com/$repoName/releases/download/market-data/market-v2.json';
+/// `--dart-define=MARKET_URL=...` points a local build at a test snapshot.
+const marketUrl = String.fromEnvironment('MARKET_URL',
+    defaultValue: 'https://github.com/$repoName/releases/download/market-data/market-v2.json');
 
 /// The market snapshot every screen shows. market.json is fetched from the repository's release
 /// asset and kept on disk; live quotes and the two indices are layered on top on refresh.

@@ -114,7 +114,7 @@ class Notifier {
   /// One example per alert kind that is switched on, so the user sees exactly what will arrive.
   /// Uses today's real stocks when there are some; otherwise a sample line.
   static Future<int> test() async {
-    final real = signals.group(Repo.I.stocks);
+    final real = signals.byKind(Repo.I.stocks);
     var shown = 0;
     for (final k in signals.Kind.values) {
       if (!signals.alerting(k)) continue;

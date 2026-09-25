@@ -46,6 +46,7 @@ class _SettingsPageState extends State<SettingsPage> {
         ));
 
     section('알림');
+    rows.add(_toggle(Settings.alertCombo, '신호 겹침 알림', '거래량 급증(전일 3배)·골든 교차(2지표 이상)·이평선 밀집 돌파 중 둘 이상'));
     rows.add(_toggle(Settings.alert3, '3지표 일치 알림', '스토캐스틱·RSI·CCI가 모두 골든(또는 데드)크로스'));
     rows.add(_toggle(Settings.alert2, '2지표 일치 알림', '셋 중 둘만 일치해도 따로 알림'));
     rows.add(_toggle(Settings.alertZoneIn, '과매도·과매수 진입 알림', "아래 '구간 판단 지표 수' 이상이 구간에 새로 들어온 날"));

@@ -19,9 +19,21 @@ void main() {
     expect(s.maBreak, (1.87, 1.78));
     final hits = hitsFor(s, RuleConfig(), 1);
     expect(hits.map((h) => h.kind), [Kind.maBreak]);
-    expect(hits.single.describe(), '이평선 밀집 돌파 (거래량 1.8배)');
+    expect(hits.single.describe(), '이평선 밀집 돌파');
+    expect(hits.single.chip(), '이평선 돌파');
     expect(Kind.maBreak.zone, isFalse);
     expect(Kind.byName('MA_BREAK'), Kind.maBreak);
+  });
+
+  test('volume surge counts only for liquid stocks, and overlaps stack', () {
+    final s = Stock.parse({...row([1.0, 1.0]), 'vr': 4.2, 'dv20': 6e8});
+    final hits = hitsFor(s, RuleConfig(), 1);
+    expect(hits.map((h) => h.kind), [Kind.surge, Kind.maBreak]);
+    expect(hits.first.chip(), '거래량 4.2배');
+    expect(overlap(hits), 2);
+    expect(rank(Kind.combo2, s), 1);
+    final thin = Stock.parse({...row(), 'vr': 4.2, 'dv20': 1e8});
+    expect(hitsFor(thin, RuleConfig(), 1), isEmpty);
   });
 
   test('no mab, no breakout', () {

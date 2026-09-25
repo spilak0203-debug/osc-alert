@@ -25,7 +25,7 @@ class Settings extends ChangeNotifier {
   // Alerts
   static const alert3 = 'alert3', alert2 = 'alert2';
   static const alertZoneIn = 'alertZoneIn', alertZoneOut = 'alertZoneOut';
-  static const alertMa = 'alertMa';
+  static const alertMa = 'alertMa', alertCombo = 'alertCombo';
   static const preMarket = 'preMarket', quietDays = 'quietDays';
   static const soundKey = 'sound'; // sound | vibrate | both | silent
   // Rule

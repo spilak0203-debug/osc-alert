@@ -207,6 +207,10 @@ def market_row(ticker, info, f, day):
         row['vol'] = num(f.Volume.iloc[-1], 0)
     dv20 = f.DollarVolume.rolling(20).mean().shift(1)
     row['dv20'] = num(dv20.iloc[at], 0) if at >= 0 else None
+    # 전 거래일 대비 거래량 배수 (전날 거래가 없었으면 뺀다)
+    traded = f.Volume[f.Volume > 0]
+    if at >= 0 and f.Volume.iloc[at] > 0 and traded.index.get_loc(day) >= 1:
+        row['vr'] = num(f.Volume.iloc[at] / traded.iloc[traded.index.get_loc(day) - 1], 2)
     mb = ind.ma_breakout(f)
     # 이평선 밀집 돌파: [전날 이평선 폭 %, 거래량 배수]. 스팩은 공모가 근처에 붙어 있어 늘 밀집이고,
     # 거래가 적은 종목은 신호가 흔들리므로 백테스트와 같이 거래대금 5억 이상만.

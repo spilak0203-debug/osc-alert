@@ -21,8 +21,9 @@ void copyStock(Stock s) {
   Toaster.show('복사했습니다: $what');
 }
 
-/// One stock: name, code, market and today's signals on the left; price, change and volume on
-/// the right; then the favourite star and the Naver link. A tap opens the detail (below the row
+/// One stock: name, code and market (with oversold/overbought in small print) and chips for
+/// today's signals on the left; price, change and volume on the right; then the favourite star
+/// and the Naver link. A tap opens the detail (below the row
 /// on phones, beside the list on wide screens); a long press or right click copies the code.
 class StockTile extends StatelessWidget {
   const StockTile({super.key, required this.stock, required this.open, required this.onTap, this.selected = false});
@@ -42,10 +43,10 @@ class StockTile extends StatelessWidget {
     final cs = Theme.of(context).colorScheme;
     final p = Palette.of(context);
     final s = stock;
-    final tags = StringBuffer('${s.ticker} · ${s.market}');
-    for (final h in signals.hits(s)) {
-      tags.write(' · ${h.describe()}');
-    }
+    final hits = signals.hits(s);
+    final sub = [s.ticker, s.market, for (final h in hits) if (h.kind.zone) h.kind.label].join(' · ');
+    final chips = [for (final h in hits) if (!h.kind.zone) h];
+    final stacked = signals.overlap(hits);
     final fav = Settings.I.favorite(s.ticker);
     final head = InkWell(
       onTap: onTap,
@@ -58,7 +59,15 @@ class StockTile extends StatelessWidget {
           Expanded(
             child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
               Text(s.name, maxLines: 1, overflow: TextOverflow.ellipsis, style: t.titleMedium),
-              Text(tags.toString(), style: t.bodySmall!.copyWith(color: cs.onSurfaceVariant)),
+              Text(sub, style: t.bodySmall!.copyWith(color: cs.onSurfaceVariant)),
+              if (chips.isNotEmpty)
+                Padding(
+                  padding: const EdgeInsets.only(top: 4),
+                  child: Wrap(spacing: 4, runSpacing: 4, children: [
+                    if (stacked >= 2) _Chip('$stacked개 겹침', p.side(true), solid: true),
+                    for (final h in chips) _Chip(h.chip(), p.side(h.kind.buySide)),
+                  ]),
+                ),
             ]),
           ),
           Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
@@ -94,6 +103,29 @@ class StockTile extends StatelessWidget {
       const Divider(height: 1, thickness: 1, indent: 16, endIndent: 16),
     ]);
   }
+}
+
+/// A small rounded label for one signal on a row; `solid` for the overlap count.
+class _Chip extends StatelessWidget {
+  const _Chip(this.text, this.color, {this.solid = false});
+
+  final String text;
+  final Color color;
+  final bool solid;
+
+  @override
+  Widget build(BuildContext context) => Container(
+        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
+        decoration: BoxDecoration(
+          color: solid ? color : color.withAlpha(0x24),
+          borderRadius: BorderRadius.circular(6),
+        ),
+        child: Text(text,
+            style: Theme.of(context).textTheme.labelSmall!.copyWith(
+                  color: solid ? Colors.white : color,
+                  fontWeight: FontWeight.w700,
+                )),
+      );
 }
 
 class _IconSpot extends StatelessWidget {

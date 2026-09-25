@@ -14,6 +14,9 @@ class Stock {
   /// spread the day before (% of the close) and the day's volume ÷ its 20-day average.
   (double, double)? maBreak;
 
+  /// Signal-day volume ÷ the previous trading day's (NaN if unknown).
+  double volumeTimes = double.nan;
+
   // Live quote (NaN until fetched)
   double livePrice = double.nan, liveChange = double.nan, liveVolume = double.nan;
 
@@ -29,6 +32,7 @@ class Stock {
       ..dv20 = value(o['dv20']);
     final mab = o['mab'];
     if (mab is List && mab.length >= 2) s.maBreak = (value(mab[0]), value(mab[1]));
+    s.volumeTimes = value(o['vr']);
     final first = o['rsi'];
     if (first is List && first.length >= 2) {
       final n = first.length;

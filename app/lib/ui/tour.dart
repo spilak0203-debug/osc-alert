@@ -60,6 +60,9 @@ class Tour {
     final summary = home.summaryKey.currentState!;
     await summary.scrollBy(900);
     await shot('1b-summary-lower');
+    summary.holdBar(0.55);
+    await shot('1e-summary-scrollbar');
+    summary.holdBar(null);
     final first = summary.firstStock;
     if (first != null) {
       if (wide) {
