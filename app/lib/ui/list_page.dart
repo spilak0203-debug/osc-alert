@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:math' as math;
 
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:scrollable_positioned_list/scrollable_positioned_list.dart';
 
 import '../core/fmt.dart';
@@ -16,10 +17,15 @@ import 'stock_tile.dart';
 
 /// A dashboard section title: one signal kind and how many stocks it has.
 class _Section {
-  _Section(this.kind, this.count);
+  _Section(this.kind, this.count, {this.of, String? label}) : label = label ?? kind!.label;
 
-  final signals.Kind kind;
+  /// Null for the search results that have no signal today.
+  final signals.Kind? kind;
+  final String label;
   final int count;
+
+  /// While searching: how many the whole group has.
+  final int? of;
 }
 
 /// The dashboard's tally of stocks per signal kind.
@@ -53,13 +59,15 @@ class ListPageState extends State<ListPage> {
   final Map<String, ChartGroup> _indexGroups = {};
   String _query = '';
   String? _expanded;
-  bool _far = false;
+
+  /// Scrolled far enough for the "to the top" button. Scroll-driven state lives in notifiers so
+  /// scrolling redraws only the overlays, never the list and its signal tally.
+  final _far = ValueNotifier<bool>(false);
   List<Object> _list = const [];
 
   /// Summary: the section title pinned over the top of the list (-1 for none), how far the next
   /// title pushes it up, and the list's height for turning item edges into pixels.
-  int _pinned = -1;
-  double _pinnedShift = 0;
+  final _pinned = ValueNotifier<(int, double)>((-1, 0));
   double _viewport = 0;
   final _pinnedKey = GlobalKey();
 
@@ -75,6 +83,11 @@ class ListPageState extends State<ListPage> {
   Timer? _barHide;
   int _visible = 1;
   static const double _thumbHeight = 48;
+
+  /// Summary: the search field under the top bar is open, and the item that was on top before
+  /// it opened (to go back to when it closes).
+  bool _searching = false;
+  int _beforeSearch = 0;
 
   /// A group to scroll to once it is on the list (the data may still be loading).
   signals.Kind? _pendingJump;
@@ -95,15 +108,8 @@ class ListPageState extends State<ListPage> {
       _thumbAt.value = _fraction(shown);
       _showBar();
     }
-    final far = shown.first.index > 4;
-    final (pinned, shift) = widget.summary ? _pin(shown) : (-1, 0.0);
-    if (far != _far || pinned != _pinned || shift != _pinnedShift) {
-      setState(() {
-        _far = far;
-        _pinned = pinned;
-        _pinnedShift = shift;
-      });
-    }
+    _far.value = shown.first.index > 4;
+    if (widget.summary) _pinned.value = _pin(shown);
   }
 
   /// How far down the list the top of the screen is, by items (0..1).
@@ -142,7 +148,7 @@ class ListPageState extends State<ListPage> {
     if (widget.summary) {
       for (var j = i; j >= 0; j--) {
         final o = _list[j];
-        if (o is _Section) return o.kind.label;
+        if (o is _Section) return o.label;
       }
       return '지수 · 오늘의 신호';
     }
@@ -177,6 +183,8 @@ class ListPageState extends State<ListPage> {
   @override
   void dispose() {
     _barHide?.cancel();
+    _far.dispose();
+    _pinned.dispose();
     _thumbAt.dispose();
     _barShown.dispose();
     _bubble.dispose();
@@ -188,7 +196,40 @@ class ListPageState extends State<ListPage> {
   }
 
   void jumpTo(signals.Kind kind) {
+    if (_searching) closeSearch();
     setState(() => _pendingJump = kind);
+  }
+
+  /// Summary: opens the search field, or closes it.
+  void toggleSearch() {
+    if (_searching) return closeSearch();
+    final shown = _positions.itemPositions.value.where((p) => p.itemTrailingEdge > 0).map((p) => p.index);
+    _beforeSearch = shown.isEmpty ? 0 : shown.reduce(math.min);
+    setState(() => _searching = true);
+  }
+
+  /// Closes the summary's search and returns to where the list was.
+  void closeSearch() {
+    if (!_searching) return;
+    _search.clear();
+    setState(() {
+      _searching = false;
+      _query = '';
+    });
+    final back = _beforeSearch;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (_items.isAttached && _list.isNotEmpty) _items.jumpTo(index: back.clamp(0, _list.length - 1));
+    });
+  }
+
+  void _setQuery(String v) {
+    setState(() => _query = v.trim().toLowerCase());
+    // The summary's results start at the top.
+    if (widget.summary) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (_items.isAttached && _list.isNotEmpty) _items.jumpTo(index: 0);
+      });
+    }
   }
 
   // ---- used by the smoke tour --------------------------------------------------------------
@@ -200,7 +241,7 @@ class ListPageState extends State<ListPage> {
 
   void search(String q) {
     _search.text = q;
-    setState(() => _query = q.trim().toLowerCase());
+    _setQuery(q);
   }
 
   /// Scrolls so that the item `offset` rows after the first stock (or `index` if given) is on top.
@@ -261,13 +302,20 @@ class ListPageState extends State<ListPage> {
     if (repo.error.isNotEmpty) s.add('불러오기 실패: ${repo.error} · 위의 새로고침을 눌러 보세요');
     if (stocks.isEmpty && !repo.loading && repo.error.isEmpty) s.add('아래로 당기거나 위의 새로고침을 누르세요');
 
+    bool matches(Stock x) => x.name.toLowerCase().contains(_query) || x.ticker.contains(_query);
     if (widget.summary) {
-      items.addAll(repo.indices);
+      // Searching keeps only the matching stocks in each group (and hides the indices and the
+      // tally); matches with no signal today are listed last so the answer is always visible.
+      final searching = _query.isNotEmpty;
       final groups = signals.group(stocks);
-      items.add(_Counts(groups));
+      if (!searching) {
+        items.addAll(repo.indices);
+        items.add(_Counts(groups));
+      }
       // Within a group: the group's own order first (volume-surge pairs last among the 2-signal
       // overlaps), then favourites; the sort is stable so the rest keep their order.
       final favs = st.favorites();
+      final listed = <String>{};
       for (final e in groups.entries) {
         if (e.value.isEmpty) continue;
         int key(Stock x) => signals.rank(e.key, x) * 2 + (favs.contains(x.ticker) ? 0 : 1);
@@ -277,8 +325,20 @@ class ListPageState extends State<ListPage> {
             return c != 0 ? c : a.$1.compareTo(b.$1);
           });
         final group = [for (final x in indexed) x.$2];
-        items.add(_Section(e.key, group.length));
-        items.addAll(group);
+        final shown = searching ? group.where(matches).toList() : group;
+        if (shown.isEmpty) continue;
+        listed.addAll(shown.map((x) => x.ticker));
+        items.add(_Section(e.key, shown.length, of: searching ? group.length : null));
+        items.addAll(shown);
+      }
+      if (searching) {
+        final quiet = [for (final x in stocks) if (st.passes(x) && matches(x) && !listed.contains(x.ticker)) x];
+        if (quiet.isNotEmpty) {
+          items.add(_Section(null, quiet.length, label: '오늘 신호 없음'));
+          items.addAll(quiet);
+        }
+        final found = listed.length + quiet.length;
+        s.add(found == 0 ? '검색 결과가 없습니다' : '검색 결과 $found종목 · 신호 있는 종목 ${listed.length}');
       }
       final filter = st.filterSummary();
       if (filter.isNotEmpty) s.add('필터: $filter · 설정 탭에서 변경');
@@ -289,7 +349,7 @@ class ListPageState extends State<ListPage> {
       final favs = st.favorites();
       final shownStocks = [
         for (final x in stocks)
-          if (st.passes(x) && (_query.isEmpty || x.name.toLowerCase().contains(_query) || x.ticker.contains(_query))) x
+          if (st.passes(x) && (_query.isEmpty || matches(x))) x
       ];
       _sort(shownStocks, sort);
       final starred = <Stock>[], rest = <Stock>[];
@@ -314,11 +374,45 @@ class ListPageState extends State<ListPage> {
     _list = items;
     _applyJump();
 
+    final status = s.join('\n');
+    // Back (or Esc) closes the summary's search before it leaves the app.
+    return PopScope(
+      canPop: !_searching,
+      onPopInvokedWithResult: (didPop, _) {
+        if (!didPop) closeSearch();
+      },
+      child: _page(context, items, status),
+    );
+  }
+
+  Widget _page(BuildContext context, List<Object> items, String status) {
+    final repo = Repo.I;
+    final st = Settings.I;
     final t = Theme.of(context).textTheme;
     final cs = Theme.of(context).colorScheme;
-    final status = s.join('\n');
     return Stack(children: [
       Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+        if (widget.summary && _searching)
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 4, 16, 0),
+            child: CallbackShortcuts(
+              bindings: {const SingleActivator(LogicalKeyboardKey.escape): closeSearch},
+              child: TextField(
+                controller: _search,
+                autofocus: true,
+                textInputAction: TextInputAction.search,
+                decoration: InputDecoration(
+                  hintText: '요약에서 종목명 또는 코드 검색',
+                  isDense: true,
+                  border: const OutlineInputBorder(),
+                  contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 13),
+                  prefixIcon: const Icon(Icons.search),
+                  suffixIcon: IconButton(tooltip: '검색 닫기', icon: const Icon(Icons.close), onPressed: closeSearch),
+                ),
+                onChanged: _setQuery,
+              ),
+            ),
+          ),
         if (!widget.summary) ...[
           Padding(
             padding: const EdgeInsets.fromLTRB(16, 4, 16, 0),
@@ -340,7 +434,7 @@ class ListPageState extends State<ListPage> {
                         },
                       ),
               ),
-              onChanged: (v) => setState(() => _query = v.trim().toLowerCase()),
+              onChanged: _setQuery,
             ),
           ),
           SizedBox(
@@ -377,7 +471,6 @@ class ListPageState extends State<ListPage> {
         Expanded(
           child: LayoutBuilder(builder: (context, box) {
             _viewport = box.maxHeight;
-            final pinned = _pinned >= 0 && _pinned < items.length && items[_pinned] is _Section ? items[_pinned] as _Section : null;
             return Stack(children: [
               RefreshIndicator(
                 onRefresh: () => repo.refresh(!widget.summary),
@@ -395,18 +488,34 @@ class ListPageState extends State<ListPage> {
                   ),
                 ),
               ),
-              if (pinned != null)
-                Positioned(
-                  top: _pinnedShift,
-                  left: 0,
-                  right: 0,
-                  child: Container(
-                    key: _pinnedKey,
-                    color: cs.surface,
-                    padding: const EdgeInsets.fromLTRB(0, _pinnedGap, 0, 4),
-                    child: _sectionHeader(context, pinned, margin: const EdgeInsets.symmetric(horizontal: 12)),
-                  ),
+              Positioned.fill(
+                child: ValueListenableBuilder(
+                  valueListenable: _pinned,
+                  builder: (context, pin, _) {
+                    final (at, shift) = pin;
+                    if (at < 0 || at >= items.length || items[at] is! _Section) return const SizedBox.shrink();
+                    // Tapping the pinned title goes to the top of its section.
+                    return Stack(children: [
+                      Positioned(
+                        top: shift,
+                        left: 0,
+                        right: 0,
+                        child: GestureDetector(
+                          onTap: () => _items.scrollTo(
+                              index: at, duration: const Duration(milliseconds: 250), curve: Curves.easeOut),
+                          child: Container(
+                            key: _pinnedKey,
+                            color: cs.surface,
+                            padding: const EdgeInsets.fromLTRB(0, _pinnedGap, 0, 4),
+                            child: _sectionHeader(context, items[at] as _Section,
+                                margin: const EdgeInsets.symmetric(horizontal: 12)),
+                          ),
+                        ),
+                      ),
+                    ]);
+                  },
                 ),
+              ),
               Positioned.fill(child: _scrollBar(context, box.maxHeight)),
             ]);
           }),
@@ -417,9 +526,13 @@ class ListPageState extends State<ListPage> {
         right: 0,
         bottom: 16,
         child: Center(
-          child: AnimatedScale(
-            scale: _far ? 1 : 0,
-            duration: const Duration(milliseconds: 150),
+          child: ValueListenableBuilder(
+            valueListenable: _far,
+            builder: (context, far, child) => AnimatedScale(
+              scale: far ? 1 : 0,
+              duration: const Duration(milliseconds: 150),
+              child: child,
+            ),
             child: FloatingActionButton.small(
               heroTag: widget.summary ? 'top-summary' : 'top-stocks',
               tooltip: '맨 위로',
@@ -654,7 +767,9 @@ class ListPageState extends State<ListPage> {
   Widget _sectionHeader(BuildContext context, _Section s,
       {EdgeInsets margin = const EdgeInsets.fromLTRB(12, _headerGap, 12, 4)}) {
     final t = Theme.of(context).textTheme;
-    final color = Palette.of(context).side(s.kind.buySide);
+    final p = Palette.of(context);
+    final kind = s.kind;
+    final color = kind == null ? p.flat : p.side(kind.buySide);
     return Container(
       margin: margin,
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
@@ -662,11 +777,11 @@ class ListPageState extends State<ListPage> {
       child: Row(children: [
         Container(width: 5, height: 22, color: color),
         const SizedBox(width: 10),
-        Expanded(child: Text(s.kind.label, style: t.titleMedium!.copyWith(color: color, fontWeight: FontWeight.w700))),
+        Expanded(child: Text(s.label, style: t.titleMedium!.copyWith(color: color, fontWeight: FontWeight.w700))),
         Container(
           padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 3),
           decoration: BoxDecoration(color: color, borderRadius: BorderRadius.circular(12)),
-          child: Text('${s.count}종목', style: t.labelLarge!.copyWith(color: Colors.white)),
+          child: Text(s.of == null ? '${s.count}종목' : '${s.count}/${s.of}종목', style: t.labelLarge!.copyWith(color: Colors.white)),
         ),
       ]),
     );

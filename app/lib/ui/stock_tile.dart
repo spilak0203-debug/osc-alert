@@ -390,6 +390,13 @@ class _StockDetailState extends State<StockDetail> {
     final children = <Widget>[
       Text('차트 표시 · 빨강은 골든·과매도 쪽, 파랑은 데드·과매수 쪽', style: t.labelMedium!.copyWith(color: muted)),
     ];
+    children.add(Padding(
+      padding: const EdgeInsets.only(top: 4),
+      child: Text.rich(TextSpan(style: t.bodySmall, children: const [
+        TextSpan(text: '◆', style: TextStyle(color: Palette.maBreak)),
+        TextSpan(text: '  이평선 밀집 돌파 · 5·20·60·120일선이 3% 안에 모였다가 종가가 넷 다 위로'),
+      ])),
+    ));
     for (final line in lines) {
       final mark = line[0];
       children.add(Padding(

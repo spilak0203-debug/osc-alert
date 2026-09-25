@@ -66,6 +66,7 @@ class HomeState extends State<Home> {
   }
 
   void show(int index) {
+    if (index != 0) summaryKey.currentState?.closeSearch();
     setState(() => tab = index);
     // Opening the stocks tab for the first time fetches every price once.
     if (index == 1 && !Repo.I.wantAll) {
@@ -127,6 +128,12 @@ class HomeState extends State<Home> {
         },
       ),
       actions: [
+        if (tab == 0)
+          IconButton(
+            tooltip: '요약에서 검색',
+            icon: const Icon(Icons.search),
+            onPressed: () => summaryKey.currentState?.toggleSearch(),
+          ),
         IconButton(
           tooltip: '새로고침',
           icon: const Icon(Icons.refresh),

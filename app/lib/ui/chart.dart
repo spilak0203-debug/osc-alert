@@ -11,7 +11,8 @@ import 'palette.dart';
 
 enum ChartType { candle, volume, stoch, rsi, cci }
 
-const int chartWindow = 120, minBars = 20;
+/// Bars on screen by default: about three months of trading days.
+const int chartWindow = 63, minBars = 20;
 
 /// Zoom, scroll and the selected day, shared by every panel of one stock so they move together.
 class ChartGroup extends ChangeNotifier {
@@ -44,6 +45,7 @@ class _Marks {
     deadCross = List.generate(n, (_) => List.filled(3, false));
     final plain = cfg.plain();
     final s = bars.series;
+    maBreak = ind.maBreakouts(s.ma, bars.close, bars.volume);
     for (var i = 1; i < n; i++) {
       goldPart[i] = rule.golden(s.snap(i - 1), s.snap(i), cfg);
       deadPart[i] = rule.dead(s.snap(i - 1), s.snap(i), cfg);
@@ -63,6 +65,9 @@ class _Marks {
 
   late List<int> goldLevel, deadLevel, goldStart, deadStart;
   late List<List<bool>> goldPart, deadPart, goldCross, deadCross;
+
+  /// Moving-average breakout days.
+  late List<bool> maBreak;
 
   static int _level(List<bool> m) {
     final c = rule.count(m);
@@ -472,15 +477,28 @@ class _ChartPainter extends CustomPainter {
     return '${d.substring(2, 4)}.${d.substring(4, 6)}.${d.substring(6)}';
   }
 
-  /// ▲ under golden matches and ▼ over dead ones: solid for 3 indicators, hollow for 2.
+  /// ▲ under golden matches and ▼ over dead ones: solid for 3 indicators, hollow for 2. ◆ under
+  /// moving-average breakouts (below the ▲ when both fall on one day).
   void _markers(Bars b, double lo, double hi) {
     final m = marks;
     if (m == null) return;
     const size = 5.0;
     for (var i = math.max(1, g.from); i < g.to; i++) {
-      if (m.goldLevel[i] >= 2) _triangle(g.x(i), y(b.low[i], lo, hi) + 3, size, true, colors.p.up, m.goldLevel[i] == 3);
+      final below = y(b.low[i], lo, hi) + 3;
+      if (m.goldLevel[i] >= 2) _triangle(g.x(i), below, size, true, colors.p.up, m.goldLevel[i] == 3);
       if (m.deadLevel[i] >= 2) _triangle(g.x(i), y(b.high[i], lo, hi) - 3, size, false, colors.p.down, m.deadLevel[i] == 3);
+      if (m.maBreak[i]) _diamond(g.x(i), below + (m.goldLevel[i] >= 2 ? size * 1.6 + 3 : 0), size + 1, Palette.maBreak);
     }
+  }
+
+  void _diamond(double cx, double tipY, double size, Color color) {
+    final path = Path()
+      ..moveTo(cx, tipY)
+      ..lineTo(cx + size, tipY + size * 1.2)
+      ..lineTo(cx, tipY + size * 2.4)
+      ..lineTo(cx - size, tipY + size * 1.2)
+      ..close();
+    c.drawPath(path, fill(color));
   }
 
   /// Shaded columns from the first matching crossing to the signal day; darker for 3 indicators.

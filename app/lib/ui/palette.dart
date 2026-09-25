@@ -15,6 +15,10 @@ class Palette {
   static const grid = Color(0x22888888);
   static const favorite = Color(0xFFF5B301);
 
+  /// ◆ on the candles for moving-average breakouts: apart from the red/blue signal marks and
+  /// the average lines.
+  static const maBreak = Color(0xFFD946EF);
+
   static Palette of(BuildContext context) => Theme.of(context).brightness == Brightness.dark ? dark : light;
 
   Color change(double v) => v.isNaN || v == 0 ? flat : v > 0 ? up : down;

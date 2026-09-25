@@ -1,5 +1,6 @@
 // The scan marks moving-average breakouts with `mab`; the app files them under their own kind.
 import 'package:flutter_test/flutter_test.dart';
+import 'package:oscalert/core/indicators.dart';
 import 'package:oscalert/core/rule.dart';
 import 'package:oscalert/core/signals.dart';
 import 'package:oscalert/core/stock.dart';
@@ -34,6 +35,20 @@ void main() {
     expect(rank(Kind.combo2, s), 1);
     final thin = Stock.parse({...row(), 'vr': 4.2, 'dv20': 1e8});
     expect(hitsFor(thin, RuleConfig(), 1), isEmpty);
+  });
+
+  // Same cases as tests/test_indicators.py MaBreakout, for the chart's ◆.
+  List<bool> marks(List<double> close) =>
+      maBreakouts([for (final n in maPeriods) sma(close, n)], close, List.filled(close.length, 1e7));
+
+  test('chart: flat then a break is marked on that day only', () {
+    final m = marks([...List.filled(130, 100.0), 104.0]);
+    expect([for (var i = 0; i < m.length; i++) if (m[i]) i], [130]);
+  });
+
+  test('chart: no mark without convergence or with falling long averages', () {
+    expect(marks([...List.filled(100, 200.0), ...List.filled(30, 100.0), 104.0]).contains(true), isFalse);
+    expect(marks([for (var i = 0; i < 130; i++) 103.0 - i * 0.025, 104.0]).last, isFalse);
   });
 
   test('no mab, no breakout', () {

@@ -37,6 +37,32 @@ Series compute(List<double> high, List<double> low, List<double> close) {
   return s;
 }
 
+/// Moving-average breakout, as the scan marks it (`ma_breakout` in signal/indicators.py): the
+/// day before, the four averages sat within `maSpread` of the close; today the close is above
+/// all four for the first time; the 60- and 120-day averages are not lower than `maSlope` days
+/// ago; and the stock trades at least `maLiquidity` won a day (20-day average before today).
+const double maSpread = 0.03, maLiquidity = 5e8;
+const int maSlope = 5;
+
+List<bool> maBreakouts(List<List<double>> ma, List<double> close, List<double> volume) {
+  final n = close.length;
+  final out = List<bool>.filled(n, false);
+  double top(int i) => [for (final m in ma) m[i]].reduce((a, b) => a > b ? a : b);
+  double bottom(int i) => [for (final m in ma) m[i]].reduce((a, b) => a < b ? a : b);
+  bool ready(int i) => i >= 0 && ma.every((m) => !m[i].isNaN);
+  final traded = [for (var i = 0; i < n; i++) close[i] * volume[i]];
+  final dv20 = sma(traded, 20);
+  for (var i = maSlope; i < n; i++) {
+    if (!ready(i) || !ready(i - 1) || !ready(i - maSlope)) continue;
+    if (!(dv20[i - 1] >= maLiquidity)) continue;
+    final gathered = (top(i - 1) - bottom(i - 1)) / close[i - 1] <= maSpread;
+    final crossed = close[i] > top(i) && close[i - 1] <= top(i - 1);
+    final rising = ma[2][i] >= ma[2][i - maSlope] && ma[3][i] >= ma[3][i - maSlope];
+    out[i] = gathered && crossed && rising;
+  }
+  return out;
+}
+
 List<double> _nan(int n) => List<double>.filled(n, double.nan);
 
 List<double> sma(List<double> x, int n) {

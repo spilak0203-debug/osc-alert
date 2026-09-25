@@ -63,6 +63,10 @@ class Tour {
     summary.holdBar(0.55);
     await shot('1e-summary-scrollbar');
     summary.holdBar(null);
+    summary.toggleSearch();
+    summary.search('삼성');
+    await shot('1f-summary-search');
+    summary.closeSearch();
     final first = summary.firstStock;
     if (first != null) {
       if (wide) {
@@ -109,6 +113,13 @@ class Tour {
         await shot('4b-stock-oscillators');
         stocks.scrollToIndex(0);
       }
+    }
+    // A moving-average breakout, for the ◆ on its candles (wide windows: the side pane).
+    final ma = Repo.I.stocks.where((s) => s.maBreak != null).firstOrNull;
+    if (wide && ma != null) {
+      home.select(ma);
+      await _pause(8000);
+      await shot('3b-ma-breakout');
     }
 
     home.show(2);
