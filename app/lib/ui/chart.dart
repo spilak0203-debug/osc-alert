@@ -56,8 +56,8 @@ class _Marks {
       final from = math.max(0, i - rule.history + 1);
       final seq = [for (var j = from; j <= i; j++) s.snap(j)];
       final m = rule.match(seq, cfg);
-      goldLevel[i] = _level(m[0]);
-      deadLevel[i] = _level(m[1]);
+      goldLevel[i] = _level(m[0], cfg.need);
+      deadLevel[i] = _level(m[1], cfg.need);
       goldStart[i] = _spanStart(i, m[0], goldPart, cfg.window);
       deadStart[i] = _spanStart(i, m[1], deadPart, cfg.window);
     }
@@ -69,9 +69,9 @@ class _Marks {
   /// Moving-average breakout days.
   late List<bool> maBreak;
 
-  static int _level(List<bool> m) {
+  static int _level(List<bool> m, int need) {
     final c = rule.count(m);
-    return c >= 2 ? c : 0;
+    return c >= need ? c : 0;
   }
 
   /// First day inside the window on which one of the matched indicators crossed.
@@ -90,7 +90,7 @@ final Expando<Map<String, _Marks>> _marksCache = Expando();
 
 _Marks _marksFor(Bars bars, rule.RuleConfig cfg) {
   final key = '${cfg.slow}${cfg.stochBand}${cfg.rsiBand}${cfg.cciBand}${cfg.stochLo}${cfg.stochHi}'
-      '${cfg.rsiLo}${cfg.rsiHi}${cfg.cciLevel}${cfg.window}';
+      '${cfg.rsiLo}${cfg.rsiHi}${cfg.cciLevel}${cfg.window}${cfg.pairs}';
   final map = _marksCache[bars] ??= {};
   return map[key] ??= _Marks(bars, cfg);
 }

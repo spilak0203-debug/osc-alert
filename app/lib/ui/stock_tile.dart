@@ -398,6 +398,7 @@ class _StockDetailState extends State<StockDetail> {
       ])),
     ));
     for (final line in lines) {
+      if (!cfg.pairs && line[0] == '△▽') continue;
       final mark = line[0];
       children.add(Padding(
         padding: const EdgeInsets.only(top: 4),

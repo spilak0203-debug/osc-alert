@@ -43,6 +43,29 @@ void main() {
     expect(find.text('종목029'), findsNothing);
   });
 
+  testWidgets('oversold/overbought groups fold away and open with a tap', (tester) async {
+    SharedPreferences.setMockInitialValues({});
+    await Settings.init();
+    // All three indicators drop into oversold today without crossing their signal lines.
+    Repo.I.stocks = [
+      Stock.parse({
+        't': '000009', 'n': '과매도종목', 'm': 'KS', 'dv20': 1e9,
+        'k_fast': [30, 10], 'd_fast': [35, 15], 'k_slow': [30, 10], 'd_slow': [35, 15],
+        'rsi': [40, 20], 'rsi_sig': [45, 25], 'cci': [0, -150],
+      }),
+    ];
+    await tester.binding.setSurfaceSize(const Size(420, 1400));
+    await tester.pumpWidget(const MaterialApp(home: Scaffold(body: ListPage(summary: true))));
+    await tester.pump();
+    expect(find.text('참고 · 과매도·과매수'), findsOneWidget);
+    expect(find.text('과매도종목'), findsNothing);
+
+    await tester.tap(find.text('펼치기'));
+    await tester.pumpAndSettle();
+    expect(find.text('과매도 진입'), findsOneWidget);
+    expect(find.text('과매도종목'), findsOneWidget);
+  });
+
   testWidgets('the tally counts stocks moved up into an overlap', (tester) async {
     SharedPreferences.setMockInitialValues({});
     await Settings.init();

@@ -11,7 +11,8 @@ import '../platform/desktop.dart';
 import '../platform/notifier.dart';
 import 'toast.dart';
 
-/// Alert choices, indicator rules, font size and app updates. Every change saves immediately.
+/// Alerts, stock filter, signal rules, display and app updates, each group in a card. Every
+/// change saves immediately.
 class SettingsPage extends StatefulWidget {
   const SettingsPage({super.key, this.controller});
 
@@ -21,9 +22,29 @@ class SettingsPage extends StatefulWidget {
   State<SettingsPage> createState() => _SettingsPageState();
 }
 
+/// The settings page's groups, in order.
+enum _Group {
+  alerts('알림', Icons.notifications_outlined),
+  filter('종목 필터', Icons.filter_alt_outlined),
+  rules('신호 조건', Icons.tune),
+  display('화면', Icons.palette_outlined),
+  app('앱', Icons.info_outline);
+
+  const _Group(this._label, this.icon);
+
+  final String _label;
+  final IconData icon;
+
+  String label(bool desktop) => this == display && desktop ? '화면·PC' : _label;
+}
+
 class _SettingsPageState extends State<SettingsPage> {
   Release? _release;
   bool _checking = false;
+
+  /// The indicator rules are rarely changed, so their card starts folded.
+  bool _rulesOpen = false;
+  final _keys = {for (final g in _Group.values) g: GlobalKey()};
 
   Settings get st => Settings.I;
 
@@ -31,129 +52,197 @@ class _SettingsPageState extends State<SettingsPage> {
   Widget build(BuildContext context) => ListenableBuilder(listenable: st, builder: (context, _) => _build(context));
 
   Widget _build(BuildContext context) {
-    final rows = <Widget>[];
-    void section(String title) {
-      if (rows.isNotEmpty) rows.add(const Padding(padding: EdgeInsets.only(top: 16), child: Divider(height: 1)));
-      rows.add(Padding(
-        padding: const EdgeInsets.only(top: 16, bottom: 4),
-        child: Text(title, style: Theme.of(context).textTheme.titleMedium),
-      ));
-    }
-
-    void label(String text) => rows.add(Padding(
+    final t = Theme.of(context).textTheme;
+    final muted = Theme.of(context).colorScheme.onSurfaceVariant;
+    Widget sub(String text) => Padding(
+          padding: const EdgeInsets.only(top: 14, bottom: 2),
+          child: Text(text, style: t.titleSmall!.copyWith(color: muted, fontWeight: FontWeight.w700)),
+        );
+    Widget label(String text) => Padding(
           padding: const EdgeInsets.only(top: 8, bottom: 4),
-          child: Text(text, style: Theme.of(context).textTheme.bodyMedium),
-        ));
+          child: Text(text, style: t.bodyMedium),
+        );
+    final pairs = st.flag(Settings.pairSignals);
 
-    section('알림');
-    rows.add(_toggle(Settings.alertCombo, '신호 겹침 알림', '거래량 급증(전일 3배)·골든 교차(2지표 이상)·이평선 밀집 돌파 중 둘 이상'));
-    rows.add(_toggle(Settings.alert3, '3지표 일치 알림', '스토캐스틱·RSI·CCI가 모두 골든(또는 데드)크로스'));
-    rows.add(_toggle(Settings.alert2, '2지표 일치 알림', '셋 중 둘만 일치해도 따로 알림'));
-    rows.add(_toggle(Settings.alertZoneIn, '과매도·과매수 진입 알림', "아래 '구간 판단 지표 수' 이상이 구간에 새로 들어온 날"));
-    rows.add(_toggle(Settings.alertZoneOut, '과매도·과매수 탈출 알림', '구간에 있던 지표가 빠져나온 날'));
-    rows.add(_toggle(Settings.alertMa, '이평선 밀집 돌파 알림', '5·20·60·120일선이 1.5% 안에 모였다가 종가가 넷 다 위로 올라선 날 (60·120일선 상승 중)'));
-    rows.add(_toggle(Settings.preMarket, '장 시작 전에도 알림', '다음 거래일 08시대에 같은 알림을 한 번 더'));
-    rows.add(_toggle(Settings.quietDays, '신호 없는 날에도 알림', '켜진 알림 종류에 맞는 종목이 없다는 알림'));
+    final alerts = <Widget>[
+      sub('받을 신호'),
+      _toggle(Settings.alertCombo, '신호 겹침', '거래량 급증(전일 3배)·골든 교차${pairs ? '(2지표 이상)' : '(3지표)'}·이평선 밀집 돌파 중 둘 이상'),
+      _toggle(Settings.alertMa, '이평선 밀집 돌파', '5·20·60·120일선이 1.5% 안에 모였다가 종가가 넷 다 위로 올라선 날 (60·120일선 상승 중)'),
+      _toggle(Settings.alert3, '3지표 일치', '스토캐스틱·RSI·CCI가 모두 골든(또는 데드)크로스'),
+      if (pairs) _toggle(Settings.alert2, '2지표 일치', '셋 중 둘만 일치해도 따로 알림'),
+      _toggle(Settings.alertZoneIn, '과매도·과매수 진입', "'신호 조건'의 구간 판단 지표 수 이상이 구간에 새로 들어온 날"),
+      _toggle(Settings.alertZoneOut, '과매도·과매수 탈출', '구간에 있던 지표가 빠져나온 날'),
+      sub('보내는 방식'),
+      _toggle(Settings.preMarket, '장 시작 전에도 알림', '다음 거래일 08시대에 같은 알림을 한 번 더'),
+      _toggle(Settings.quietDays, '신호 없는 날에도 알림', '켜진 알림 종류에 맞는 종목이 없다는 알림'),
+      label('소리'),
+      _choice(
+        st.sound,
+        Platform.isAndroid
+            ? const [['sound', '소리'], ['vibrate', '진동'], ['both', '소리+진동'], ['silent', '무음']]
+            : const [['both', '소리'], ['silent', '무음']],
+        (v) => st.setString(Settings.soundKey, v),
+      ),
+      _button('테스트 알림 보내기 (켜진 종류별 예시)', true, () async {
+        if (!await Notifier.allowed()) {
+          Toaster.show('알림 권한을 허용해야 합니다', long: true);
+          await Notifier.askPermission();
+          return;
+        }
+        final n = await Notifier.test();
+        Toaster.show('테스트 알림 $n개를 보냈습니다');
+      }),
+    ];
 
-    label('알림 방식');
-    rows.add(_choice(
-      st.sound,
-      Platform.isAndroid
-          ? const [['sound', '소리'], ['vibrate', '진동'], ['both', '소리+진동'], ['silent', '무음']]
-          : const [['both', '소리'], ['silent', '무음']],
-      (v) => st.setString(Settings.soundKey, v),
-    ));
-    rows.add(_button('테스트 알림 보내기 (켜진 종류별 예시)', true, () async {
-      if (!await Notifier.allowed()) {
-        Toaster.show('알림 권한을 허용해야 합니다', long: true);
-        await Notifier.askPermission();
-        return;
-      }
-      final n = await Notifier.test();
-      Toaster.show('테스트 알림 $n개를 보냈습니다');
-    }));
+    final filter = <Widget>[
+      Text('요약·종목 탭·알림에 모두 적용됩니다', style: t.bodySmall!.copyWith(color: muted)),
+      label('시장'),
+      _choice(st.market, const [['all', '전체'], ['코스피', '코스피'], ['코스닥', '코스닥']],
+          (v) => st.setString(Settings.filterMarket, v)),
+      label('20일 평균 거래대금 최소'),
+      _choice(_amount(Settings.filterDv), const [['0', '없음'], ['1', '1억'], ['5', '5억'], ['10', '10억'], ['50', '50억']],
+          (v) => st.setNumber(Settings.filterDv, double.parse(v))),
+      label('시가총액 최소'),
+      _choice(_amount(Settings.filterCap),
+          const [['0', '없음'], ['500', '500억'], ['1000', '1천억'], ['5000', '5천억'], ['10000', '1조']],
+          (v) => st.setNumber(Settings.filterCap, double.parse(v))),
+    ];
 
-    section('종목 필터');
-    label('대시보드·종목 탭·알림에 모두 적용됩니다');
-    label('시장');
-    rows.add(_choice(st.market, const [['all', '전체'], ['코스피', '코스피'], ['코스닥', '코스닥']],
-        (v) => st.setString(Settings.filterMarket, v)));
-    label('20일 평균 거래대금 최소');
-    rows.add(_choice(_amount(Settings.filterDv), const [['0', '없음'], ['1', '1억'], ['5', '5억'], ['10', '10억'], ['50', '50억']],
-        (v) => st.setNumber(Settings.filterDv, double.parse(v))));
-    label('시가총액 최소');
-    rows.add(_choice(_amount(Settings.filterCap),
-        const [['0', '없음'], ['500', '500억'], ['1000', '1천억'], ['5000', '5천억'], ['10000', '1조']],
-        (v) => st.setNumber(Settings.filterCap, double.parse(v))));
+    final rules = <Widget>[
+      sub('일치 판단'),
+      _toggle(Settings.pairSignals, '2지표 일치도 신호로 보기',
+          '끄면 스토캐스틱·RSI·CCI 셋이 모두 맞을 때만 골든·데드 신호. 요약 분류·신호 겹침·알림·차트에 모두 적용'),
+      label('허용 기간 · 신호일과 그 앞 며칠 안에 교차하면 같이 센다'),
+      _choice('${st.integer(Settings.windowKey)}', [for (var d = 0; d <= rule.maxWindow; d++) ['$d', d == 0 ? '당일' : '$d일']],
+          (v) => st.setInteger(Settings.windowKey, int.parse(v))),
+      label('과매도·과매수 구간 판단 지표 수 · 이 개수 이상이 구간에 있을 때'),
+      _choice('${st.integer(Settings.zoneNeed)}', const [['1', '1개'], ['2', '2개'], ['3', '3개']],
+          (v) => st.setInteger(Settings.zoneNeed, int.parse(v))),
+      sub('스토캐스틱'),
+      _choice(st.flag(Settings.stochSlow) ? 'slow' : 'fast', const [['slow', 'Slow 5-3-3'], ['fast', 'Fast 5-3']],
+          (v) => st.setFlag(Settings.stochSlow, v == 'slow')),
+      _toggle(Settings.stochBand, '밴드 조건 사용', '끄면 %K·%D가 교차하기만 하면 신호. 켜면 과매도 아래·과매수 위에서 교차할 때만'),
+      _numbers(Settings.stochLo, '과매도', Settings.stochHi, '과매수'),
+      sub('RSI (14 · 시그널 9)'),
+      _toggle(Settings.rsiBand, '밴드 조건 사용', '끄면 RSI·시그널선이 교차하기만 하면 신호. 켜면 과매도 아래·과매수 위에서 교차할 때만'),
+      _numbers(Settings.rsiLo, '과매도', Settings.rsiHi, '과매수'),
+      sub('CCI (20)'),
+      _toggle(Settings.cciBand, '밴드 조건 사용', '켜면 ±기준선 돌파, 끄면 0선 돌파'),
+      _numbers(Settings.cciLevel, '기준선 (±)', null, null),
+    ];
+    // What the folded rule card says about itself.
+    String band(String key) => st.flag(key) ? '켬' : '끔';
+    final ruleSummary = '${pairs ? '2지표도 신호' : '3지표만 신호'} · 허용 기간 '
+        '${st.integer(Settings.windowKey) == 0 ? '당일' : '${st.integer(Settings.windowKey)}일'} · '
+        '스토캐스틱 ${st.flag(Settings.stochSlow) ? 'Slow' : 'Fast'} · 밴드 조건 스토캐스틱 ${band(Settings.stochBand)}·'
+        'RSI ${band(Settings.rsiBand)}·CCI ${band(Settings.cciBand)}';
 
-    section('일치 판단');
-    label('허용 기간 · 신호일과 그 앞 며칠 안에 교차하면 같이 센다');
-    rows.add(_choice('${st.integer(Settings.windowKey)}',
-        [for (var d = 0; d <= rule.maxWindow; d++) ['$d', d == 0 ? '당일' : '$d일']],
-        (v) => st.setInteger(Settings.windowKey, int.parse(v))));
-    label('과매도·과매수 구간 판단 지표 수 · 이 개수 이상이 구간에 있을 때');
-    rows.add(_choice('${st.integer(Settings.zoneNeed)}', const [['1', '1개'], ['2', '2개'], ['3', '3개']],
-        (v) => st.setInteger(Settings.zoneNeed, int.parse(v))));
+    final display = <Widget>[
+      label('테마'),
+      _choice(st.theme, const [['system', '기기 설정'], ['light', '라이트'], ['dark', '다크']],
+          (v) => st.setString(Settings.themeKey, v)),
+      label('글자 크기'),
+      Padding(
+        padding: const EdgeInsets.only(top: 4),
+        child: Row(children: [
+          OutlinedButton(onPressed: () => _changeFont(-1), child: const Text('가−')),
+          Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 16),
+            child: Text('${(st.fontScale * 100).round()}%', style: t.bodyLarge),
+          ),
+          OutlinedButton(onPressed: () => _changeFont(1), child: const Text('가+')),
+        ]),
+      ),
+      label(Platform.isAndroid ? '종목을 길게 누르면 복사할 것' : '종목을 길게 누르거나 오른쪽 클릭하면 복사할 것'),
+      _choice(st.flag(Settings.copyName) ? 'name' : 'code', const [['code', '종목코드'], ['name', '종목명']],
+          (v) => st.setFlag(Settings.copyName, v == 'name')),
+      if (Desktop.supported) ...[
+        sub('PC'),
+        _toggle(Settings.trayOnClose, '창을 닫으면 트레이로', '켜 두면 창을 닫아도 알림 확인을 계속합니다. 끝내려면 트레이 아이콘 메뉴의 종료'),
+        _toggle(Settings.startWithWindows, '윈도우 시작 시 실행', '로그인하면 트레이에서 조용히 시작해 알림을 확인합니다',
+            onChanged: Desktop.setStartWithWindows),
+      ],
+    ];
 
-    section('스토캐스틱');
-    rows.add(_choice(st.flag(Settings.stochSlow) ? 'slow' : 'fast', const [['slow', 'Slow 5-3-3'], ['fast', 'Fast 5-3']],
-        (v) => st.setFlag(Settings.stochSlow, v == 'slow')));
-    rows.add(_toggle(Settings.stochBand, '밴드 조건 사용', '끄면 %K·%D가 교차하기만 하면 신호. 켜면 과매도 아래·과매수 위에서 교차할 때만'));
-    rows.add(_numbers(Settings.stochLo, '과매도', Settings.stochHi, '과매수'));
-
-    section('RSI (14 · 시그널 9)');
-    rows.add(_toggle(Settings.rsiBand, '밴드 조건 사용', '끄면 RSI·시그널선이 교차하기만 하면 신호. 켜면 과매도 아래·과매수 위에서 교차할 때만'));
-    rows.add(_numbers(Settings.rsiLo, '과매도', Settings.rsiHi, '과매수'));
-
-    section('CCI (20)');
-    rows.add(_toggle(Settings.cciBand, '밴드 조건 사용', '켜면 ±기준선 돌파, 끄면 0선 돌파'));
-    rows.add(_numbers(Settings.cciLevel, '기준선 (±)', null, null));
-
-    section('화면');
-    label('테마');
-    rows.add(_choice(st.theme, const [['system', '기기 설정'], ['light', '라이트'], ['dark', '다크']],
-        (v) => st.setString(Settings.themeKey, v)));
-    label('글자 크기');
-    rows.add(Padding(
-      padding: const EdgeInsets.only(top: 8),
-      child: Row(children: [
-        OutlinedButton(onPressed: () => _changeFont(-1), child: const Text('가−')),
-        Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 16),
-          child: Text('${(st.fontScale * 100).round()}%', style: Theme.of(context).textTheme.bodyLarge),
-        ),
-        OutlinedButton(onPressed: () => _changeFont(1), child: const Text('가+')),
-      ]),
-    ));
-    label(Platform.isAndroid ? '종목을 길게 누르면 복사할 것' : '종목을 길게 누르거나 오른쪽 클릭하면 복사할 것');
-    rows.add(_choice(st.flag(Settings.copyName) ? 'name' : 'code', const [['code', '종목코드'], ['name', '종목명']],
-        (v) => st.setFlag(Settings.copyName, v == 'name')));
-
-    if (Desktop.supported) {
-      section('PC');
-      rows.add(_toggle(Settings.trayOnClose, '창을 닫으면 트레이로', '켜 두면 창을 닫아도 알림 확인을 계속합니다. 끝내려면 트레이 아이콘 메뉴의 종료'));
-      rows.add(_toggle(Settings.startWithWindows, '윈도우 시작 시 실행', '로그인하면 트레이에서 조용히 시작해 알림을 확인합니다',
-          onChanged: Desktop.setStartWithWindows));
-    }
-
-    section('앱');
     final newer = AppUpdate.newer(_release);
-    label('현재 버전 ${AppUpdate.versionName}${newer ? ' · 새 버전 ${_release!.name}' : ''}');
-    rows.add(_button(newer ? '새 버전 설치' : '업데이트 확인', true, _checking ? null : () => _update(newer)));
-    rows.add(_button('버전 기록 보기', false, () => showChangelog(context)));
+    final app = <Widget>[
+      Text('현재 버전 ${AppUpdate.versionName}${newer ? ' · 새 버전 ${_release!.name}' : ''}', style: t.bodyMedium),
+      _button(newer ? '새 버전 설치' : '업데이트 확인', true, _checking ? null : () => _update(newer)),
+      _button('버전 기록 보기', false, () => showChangelog(context)),
+    ];
 
+    final groups = {
+      _Group.alerts: alerts,
+      _Group.filter: filter,
+      _Group.rules: rules,
+      _Group.display: display,
+      _Group.app: app,
+    };
     return ListView(
       controller: widget.controller,
-      padding: const EdgeInsets.fromLTRB(16, 4, 16, 32),
+      padding: const EdgeInsets.fromLTRB(12, 4, 12, 32),
       children: [
         Center(
           child: ConstrainedBox(
             constraints: const BoxConstraints(maxWidth: 720),
-            child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: rows),
+            child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+              // Jump to a group.
+              Wrap(spacing: 6, runSpacing: 6, children: [
+                for (final g in _Group.values)
+                  ActionChip(
+                    avatar: Icon(g.icon, size: 18),
+                    label: Text(g.label(Desktop.supported)),
+                    onPressed: () => _goTo(g),
+                  ),
+              ]),
+              for (final e in groups.entries)
+                _card(context, e.key, e.value, folded: e.key == _Group.rules && !_rulesOpen, summary: ruleSummary),
+            ]),
           ),
         ),
       ],
     );
+  }
+
+  /// One group in a card: icon and title, then its rows. The rule card folds to one summary line.
+  Widget _card(BuildContext context, _Group g, List<Widget> children, {bool folded = false, String? summary}) {
+    final t = Theme.of(context).textTheme;
+    final cs = Theme.of(context).colorScheme;
+    final foldable = g == _Group.rules;
+    final head = Padding(
+      padding: const EdgeInsets.fromLTRB(16, 14, 12, 4),
+      child: Row(children: [
+        Icon(g.icon, color: cs.primary),
+        const SizedBox(width: 10),
+        Expanded(child: Text(g.label(Desktop.supported), style: t.titleMedium!.copyWith(fontWeight: FontWeight.w700))),
+        if (foldable) ...[
+          Text(folded ? '펼치기' : '접기', style: t.labelLarge!.copyWith(color: cs.onSurfaceVariant)),
+          Icon(folded ? Icons.expand_more : Icons.expand_less, color: cs.onSurfaceVariant),
+        ],
+      ]),
+    );
+    return Card.filled(
+      key: _keys[g],
+      margin: const EdgeInsets.only(top: 12),
+      clipBehavior: Clip.antiAlias,
+      child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+        if (foldable) InkWell(onTap: () => setState(() => _rulesOpen = folded), child: head) else head,
+        Padding(
+          padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+          child: folded
+              ? Text(summary ?? '', style: t.bodySmall!.copyWith(color: cs.onSurfaceVariant))
+              : Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: children),
+        ),
+      ]),
+    );
+  }
+
+  void _goTo(_Group g) {
+    if (g == _Group.rules && !_rulesOpen) setState(() => _rulesOpen = true);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      final c = _keys[g]?.currentContext;
+      if (c != null) Scrollable.ensureVisible(c, duration: const Duration(milliseconds: 250), curve: Curves.easeOut);
+    });
   }
 
   Future<void> _update(bool newer) async {

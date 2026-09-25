@@ -28,6 +28,16 @@ class _Section {
   final int? of;
 }
 
+/// A part of the dashboard (rising, falling, reference) and how many stocks it lists. The
+/// reference part can be folded away.
+class _Block {
+  _Block(this.block, this.count, {this.open = true});
+
+  final signals.Block block;
+  final int count;
+  final bool open;
+}
+
 /// The dashboard's tally of stocks per signal kind.
 class _Counts {
   _Counts(this.groups) {
@@ -87,6 +97,9 @@ class ListPageState extends State<ListPage> {
 
   /// Space above a section title's strip in the list, and above the pinned one.
   static const double _headerGap = 18, _pinnedGap = 4;
+
+  /// Space above a part's title ("상승 신호" …).
+  static const double _blockGap = 26;
 
   /// The scroll bar on the right: where its thumb is (0..1), whether it is showing (while the
   /// list moves, and always on Windows), and the bubble beside it — the section (or stock) at
@@ -179,6 +192,8 @@ class ListPageState extends State<ListPage> {
     if (_viewport <= 0 || _list.isEmpty) return (-1, 0);
     var at = -1;
     for (var i = shown.first.index.clamp(0, _list.length - 1); i >= 0; i--) {
+      // A part's title ends the groups above it: nothing to pin until the next group.
+      if (_list[i] is _Block) return (-1, 0);
       if (_list[i] is _Section) {
         at = i;
         break;
@@ -187,10 +202,14 @@ class ListPageState extends State<ListPage> {
     if (at < 0) return (-1, 0);
     final own = shown.where((p) => p.index == at).firstOrNull;
     if (own != null && own.itemLeadingEdge * _viewport + _headerGap > _pinnedGap) return (-1, 0);
-    final next = shown.where((p) => p.index > at && p.index < _list.length && _list[p.index] is _Section).firstOrNull;
+    // The next group's title, or the next part's, pushes the pinned one up.
+    final next = shown
+        .where((p) => p.index > at && p.index < _list.length && (_list[p.index] is _Section || _list[p.index] is _Block))
+        .firstOrNull;
     if (next == null) return (at, 0);
     final height = _pinnedKey.currentContext?.size?.height ?? 52;
-    final room = next.itemLeadingEdge * _viewport + _headerGap - height;
+    final gap = _list[next.index] is _Block ? _blockGap : _headerGap;
+    final room = next.itemLeadingEdge * _viewport + gap - height;
     return (at, room < 0 ? room : 0);
   }
 
@@ -211,6 +230,7 @@ class ListPageState extends State<ListPage> {
 
   void jumpTo(signals.Kind kind) {
     if (_searching) closeSearch();
+    if (kind.zone && !Settings.I.flag(Settings.showZones)) Settings.I.setFlag(Settings.showZones, true);
     setState(() => _pendingJump = kind);
   }
 
@@ -262,6 +282,14 @@ class ListPageState extends State<ListPage> {
   void scrollToStock({int offset = 0}) {
     final at = _list.indexWhere((o) => o is Stock);
     if (at >= 0 && _items.isAttached) _items.jumpTo(index: at + offset);
+  }
+
+  /// Summary: puts the signal tally, or a part's title, at the top.
+  void showTally() => scrollToIndex(math.max(0, _list.indexWhere((o) => o is _Counts)));
+
+  void showBlock(signals.Block b) {
+    final at = _list.indexWhere((o) => o is _Block && o.block == b);
+    if (at >= 0) scrollToIndex(at);
   }
 
   void scrollToIndex(int index, {double alignment = 0}) {
@@ -330,20 +358,31 @@ class ListPageState extends State<ListPage> {
       // overlaps), then favourites; the sort is stable so the rest keep their order.
       final favs = st.favorites();
       final listed = <String>{};
-      for (final e in groups.entries) {
-        if (e.value.isEmpty) continue;
-        int key(Stock x) => signals.rank(e.key, x) * 2 + (favs.contains(x.ticker) ? 0 : 1);
-        final indexed = [for (var i = 0; i < e.value.length; i++) (i, e.value[i])]
-          ..sort((a, b) {
-            final c = key(a.$2).compareTo(key(b.$2));
-            return c != 0 ? c : a.$1.compareTo(b.$1);
-          });
-        final group = [for (final x in indexed) x.$2];
-        final shown = searching ? group.where(matches).toList() : group;
-        if (shown.isEmpty) continue;
-        listed.addAll(shown.map((x) => x.ticker));
-        items.add(_Section(e.key, shown.length, of: searching ? group.length : null));
-        items.addAll(shown);
+      final zonesOpen = searching || st.flag(Settings.showZones);
+      for (final block in signals.Block.values) {
+        final part = <Object>[];
+        final inPart = <String>{};
+        for (final e in groups.entries) {
+          if (e.key.block != block || e.value.isEmpty) continue;
+          int key(Stock x) => signals.rank(e.key, x) * 2 + (favs.contains(x.ticker) ? 0 : 1);
+          final indexed = [for (var i = 0; i < e.value.length; i++) (i, e.value[i])]
+            ..sort((a, b) {
+              final c = key(a.$2).compareTo(key(b.$2));
+              return c != 0 ? c : a.$1.compareTo(b.$1);
+            });
+          final group = [for (final x in indexed) x.$2];
+          final shown = searching ? group.where(matches).toList() : group;
+          if (shown.isEmpty) continue;
+          inPart.addAll(shown.map((x) => x.ticker));
+          part
+            ..add(_Section(e.key, shown.length, of: searching ? group.length : null))
+            ..addAll(shown);
+        }
+        if (inPart.isEmpty) continue;
+        listed.addAll(inPart);
+        final open = block != signals.Block.zones || zonesOpen;
+        items.add(_Block(block, inPart.length, open: open));
+        if (open) items.addAll(part);
       }
       if (searching) {
         final quiet = [for (final x in stocks) if (st.passes(x) && matches(x) && !listed.contains(x.ticker)) x];
@@ -688,6 +727,7 @@ class ListPageState extends State<ListPage> {
     if (o is MarketIndex) return _indexCard(context, o);
     if (o is _Counts) return _countsCard(context, o);
     if (o is _Section) return _sectionHeader(context, o);
+    if (o is _Block) return _blockHeader(context, o);
     if (o is String) {
       return Padding(
         padding: const EdgeInsets.fromLTRB(16, 18, 16, 6),
@@ -746,41 +786,86 @@ class ListPageState extends State<ListPage> {
     );
   }
 
+  /// Rising and falling tiles, two a row, and the oversold/overbought counts in one small line.
   Widget _countsCard(BuildContext context, _Counts counts) {
     final t = Theme.of(context).textTheme;
     final p = Palette.of(context);
-    final tiles = <Widget>[];
-    for (final k in signals.Kind.values) {
+    final muted = Theme.of(context).colorScheme.onSurfaceVariant;
+    final pairs = Settings.I.flag(Settings.pairSignals);
+    int total(signals.Kind k) => (counts.groups[k]?.length ?? 0) + (counts.inOverlap[k] ?? 0);
+
+    Widget tile(signals.Kind k) {
       // Every stock with the signal, those listed under an overlap included; a tap goes to the
       // signal's own group, or to the overlap group when all of them are there.
       final own = counts.groups[k]?.length ?? 0;
       final moved = counts.inOverlap[k] ?? 0;
       final n = own + moved;
-      tiles.add(InkWell(
+      return InkWell(
         onTap: () => jumpTo(own == 0 && moved > 0 ? counts.overlapGroup[k]! : k),
         child: Padding(
-          padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 8),
+          padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 6),
           child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
             Text('$n', style: t.headlineSmall!.copyWith(color: n == 0 ? p.flat : p.side(k.buySide))),
             Text('${k.label}${signals.alerting(k) ? ' · 알림' : ''}', style: t.bodySmall),
-            if (moved > 0)
-              Text('겹침 칸에 $moved', style: t.labelSmall!.copyWith(color: Theme.of(context).colorScheme.onSurfaceVariant)),
+            if (moved > 0) Text('겹침 칸에 $moved', style: t.labelSmall!.copyWith(color: muted)),
           ]),
         ),
-      ));
+      );
     }
+
+    final body = <Widget>[Text('오늘의 신호 · 누르면 해당 목록으로', style: t.titleSmall)];
+    for (final block in [signals.Block.rising, signals.Block.falling]) {
+      final kinds = [
+        for (final k in signals.Kind.values)
+          if (k.block == block && (pairs || (k != signals.Kind.gold2 && k != signals.Kind.dead2))) k
+      ];
+      body.add(Padding(
+        padding: const EdgeInsets.only(top: 10, left: 4),
+        child: Text(block.label, style: t.labelMedium!.copyWith(color: muted)),
+      ));
+      for (var r = 0; r < kinds.length; r += 2) {
+        body.add(Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Expanded(child: tile(kinds[r])),
+          Expanded(child: r + 1 < kinds.length ? tile(kinds[r + 1]) : const SizedBox()),
+        ]));
+      }
+    }
+    final zones = [for (final k in signals.Kind.values) if (k.zone) k];
+    body.add(InkWell(
+      onTap: () => jumpTo(zones.firstWhere((k) => total(k) > 0, orElse: () => zones.first)),
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(4, 10, 4, 4),
+        child: Text('참고 · ${[for (final k in zones) '${k.label} ${total(k)}'].join(' · ')}',
+            style: t.bodySmall!.copyWith(color: muted)),
+      ),
+    ));
     return _card(
       context,
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
-      child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-        Text('오늘의 신호 · 누르면 해당 목록으로', style: t.titleSmall),
-        for (var r = 0; r < tiles.length; r += 2)
-          Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
-            Expanded(child: tiles[r]),
-            Expanded(child: r + 1 < tiles.length ? tiles[r + 1] : const SizedBox()),
-          ]),
+      child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: body),
+    );
+  }
+
+  /// A part's title above its groups; the reference part folds and unfolds with a tap.
+  Widget _blockHeader(BuildContext context, _Block b) {
+    final t = Theme.of(context).textTheme;
+    final muted = Theme.of(context).colorScheme.onSurfaceVariant;
+    final foldable = b.block == signals.Block.zones && !_searching;
+    final row = Padding(
+      padding: const EdgeInsets.fromLTRB(16, _blockGap, 12, 0),
+      child: Row(children: [
+        Text(b.block.label, style: t.titleLarge!.copyWith(fontWeight: FontWeight.w800)),
+        const SizedBox(width: 8),
+        Text('${b.count}종목', style: t.bodyMedium!.copyWith(color: muted)),
+        const Spacer(),
+        if (foldable) ...[
+          Text(b.open ? '접기' : '펼치기', style: t.labelLarge!.copyWith(color: muted)),
+          Icon(b.open ? Icons.expand_less : Icons.expand_more, color: muted),
+        ],
       ]),
     );
+    if (!foldable) return row;
+    return InkWell(onTap: () => Settings.I.setFlag(Settings.showZones, !b.open), child: row);
   }
 
   /// Coloured bar, bold title and a count badge, on a tinted strip so sections stand apart.

@@ -26,6 +26,10 @@ class Settings extends ChangeNotifier {
   static const alert3 = 'alert3', alert2 = 'alert2';
   static const alertZoneIn = 'alertZoneIn', alertZoneOut = 'alertZoneOut';
   static const alertMa = 'alertMa', alertCombo = 'alertCombo';
+  // Two of three indicators count as a signal (off: all three are needed)
+  static const pairSignals = 'pairSignals';
+  // Summary: the oversold/overbought groups are unfolded
+  static const showZones = 'showZones';
   static const preMarket = 'preMarket', quietDays = 'quietDays';
   static const soundKey = 'sound'; // sound | vibrate | both | silent
   // Rule
@@ -60,6 +64,7 @@ class Settings extends ChangeNotifier {
       case alertZoneIn:
       case alertZoneOut:
       case alertMa:
+      case showZones:
       case preMarket:
       case quietDays:
       case copyName:
@@ -174,6 +179,7 @@ class Settings extends ChangeNotifier {
       ..rsiHi = number(rsiHi)
       ..cciLevel = number(cciLevel);
     r.window = integer(windowKey).clamp(0, maxWindow);
+    r.pairs = flag(pairSignals);
     return r;
   }
 

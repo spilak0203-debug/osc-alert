@@ -27,7 +27,7 @@ void main() {
     await tester.binding.setSurfaceSize(const Size(420, 800));
     await tester.pumpWidget(MaterialApp(home: Scaffold(body: ListPage(key: key, summary: true))));
     await tester.pump();
-    expect(find.text('2종목'), findsOneWidget); // volume-surge group
+    expect(find.text('2종목'), findsNWidgets(2)); // the rising part and its volume-surge group
     expect(find.text('삼성감마'), findsNothing);
 
     key.currentState!.toggleSearch();

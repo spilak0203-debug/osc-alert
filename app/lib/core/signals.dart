@@ -38,6 +38,8 @@ enum Kind {
   /// Oversold/overbought: for reference, shown small on the rows.
   bool get zone => index >= Kind.oversoldIn.index;
 
+  Block get block => zone ? Block.zones : buySide ? Block.rising : Block.falling;
+
   /// One of the three rising signals whose overlaps are counted.
   bool get rising => this == surge || this == gold3 || this == gold2 || this == maBreak;
 
@@ -47,6 +49,17 @@ enum Kind {
     }
     return null;
   }
+}
+
+/// The summary's three parts, in order. The kinds of each part are next to each other in `Kind`.
+enum Block {
+  rising('상승 신호'),
+  falling('하락 신호'),
+  zones('참고 · 과매도·과매수');
+
+  const Block(this.label);
+
+  final String label;
 }
 
 /// What one stock did on the signal day.
@@ -103,7 +116,7 @@ List<Hit> hitsFor(Stock s, RuleConfig c, int zoneNeed) {
     final g = count(m[0]);
     if (g == 3) {
       out.add(Hit(Kind.gold3, m[0]));
-    } else if (g == 2) {
+    } else if (g == 2 && c.pairs) {
       out.add(Hit(Kind.gold2, m[0]));
     }
   }
@@ -112,7 +125,7 @@ List<Hit> hitsFor(Stock s, RuleConfig c, int zoneNeed) {
   final d = count(m[1]);
   if (d == 3) {
     out.add(Hit(Kind.dead3, m[1]));
-  } else if (d == 2) {
+  } else if (d == 2 && c.pairs) {
     out.add(Hit(Kind.dead2, m[1]));
   }
   final now = zones(s.last()!, c), before = zones(s.prev()!, c);

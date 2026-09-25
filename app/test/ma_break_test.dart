@@ -51,6 +51,20 @@ void main() {
     expect(marks([for (var i = 0; i < 130; i++) 101.0 - i * 0.01, 102.0]).last, isFalse);
   });
 
+  test('two of three counts only while pairs are on', () {
+    // Stochastic and RSI cross up, CCI does not.
+    final s = Stock.parse({
+      't': '000001', 'n': 'x', 'm': 'KS',
+      'k_fast': [40, 55], 'd_fast': [50, 50], 'k_slow': [40, 55], 'd_slow': [50, 50],
+      'rsi': [50, 51], 'rsi_sig': [50, 50], 'cci': [0, 10],
+    });
+    final c = RuleConfig()
+      ..stochBand = false
+      ..rsiBand = false;
+    expect(hitsFor(s, c, 3).map((h) => h.kind), [Kind.gold2]);
+    expect(hitsFor(s, c..pairs = false, 3), isEmpty);
+  });
+
   test('no mab, no breakout', () {
     final s = Stock.parse(row());
     expect(s.maBreak, isNull);

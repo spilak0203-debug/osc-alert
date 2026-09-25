@@ -19,6 +19,12 @@ class RuleConfig {
   /// An indicator counts if it crossed on the signal day or up to this many days before.
   int window = 0;
 
+  /// Two of the three indicators are a signal too; off, only all three are.
+  bool pairs = true;
+
+  /// Fewest indicators that make a golden or dead signal.
+  int get need => pairs ? 2 : 3;
+
   RuleConfig copy() => RuleConfig()
     ..slow = slow
     ..stochBand = stochBand
@@ -29,7 +35,8 @@ class RuleConfig {
     ..rsiLo = rsiLo
     ..rsiHi = rsiHi
     ..cciLevel = cciLevel
-    ..window = window;
+    ..window = window
+    ..pairs = pairs;
 
   /// The same rule without the stochastic and RSI band conditions: every crossing of the lines.
   RuleConfig plain() => copy()

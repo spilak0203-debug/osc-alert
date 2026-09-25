@@ -63,6 +63,10 @@ class Tour {
     summary.holdBar(0.55);
     await shot('1e-summary-scrollbar');
     summary.holdBar(null);
+    summary.showTally();
+    await shot('1g-summary-tally');
+    summary.showBlock(signals.Block.falling);
+    await shot('1h-summary-falling');
     summary.toggleSearch();
     summary.search('삼성');
     await shot('1f-summary-search');
