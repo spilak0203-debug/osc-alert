@@ -22,6 +22,9 @@ class RuleConfig {
   /// Two of the three indicators are a signal too; off, only all three are.
   bool pairs = true;
 
+  /// Moving-average breakout: require the 60- / 120-day average to be rising.
+  bool maUp60 = true, maUp120 = true;
+
   /// Fewest indicators that make a golden or dead signal.
   int get need => pairs ? 2 : 3;
 
@@ -36,7 +39,9 @@ class RuleConfig {
     ..rsiHi = rsiHi
     ..cciLevel = cciLevel
     ..window = window
-    ..pairs = pairs;
+    ..pairs = pairs
+    ..maUp60 = maUp60
+    ..maUp120 = maUp120;
 
   /// The same rule without the stochastic and RSI band conditions: every crossing of the lines.
   RuleConfig plain() => copy()

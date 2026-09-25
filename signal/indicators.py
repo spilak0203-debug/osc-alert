@@ -50,7 +50,8 @@ def series(frame):
 
 def ma_breakout(frame):
     """이평선 밀집 돌파: 전날 5·20·60·120일선이 종가의 `MA_SPREAD` 안에 모여 있다가 오늘 종가가
-    넷 모두 위로 처음 올라서고, 60·120일선이 `MA_SLOPE`거래일 전보다 낮지 않은 날.
+    넷 모두 위로 처음 올라선 날(`cross`). `up60`·`up120`은 그 선이 `MA_SLOPE`거래일 전보다 낮지
+    않은지 — 앱이 설정대로 고른다. `hit`은 둘 다 상승인 기본 조건.
 
     `spread`는 전날 이평선 폭(종가 대비 %), `volume`은 오늘 거래량 ÷ 직전 20일 평균.
     과거 1년 백테스트(34건)에서 10거래일 뒤 오른 비율 69% (아무 종목·아무 날은 42%). 3%로 두면
@@ -59,12 +60,13 @@ def ma_breakout(frame):
     ma = pd.concat([c.rolling(n).mean() for n in MA_SPANS], axis=1, ignore_index=True)
     top = ma.max(axis=1).where(ma.notna().all(axis=1))
     spread = (top - ma.min(axis=1)) / c
-    rising = (ma[2] >= ma[2].shift(MA_SLOPE)) & (ma[3] >= ma[3].shift(MA_SLOPE))
-    hit = (spread.shift(1) <= MA_SPREAD) & (c > top) & (c.shift(1) <= top.shift(1)) & rising
+    up60, up120 = ma[2] >= ma[2].shift(MA_SLOPE), ma[3] >= ma[3].shift(MA_SLOPE)
+    cross = (spread.shift(1) <= MA_SPREAD) & (c > top) & (c.shift(1) <= top.shift(1))
     if 'Tradable' in frame:
-        hit &= frame['Tradable'].astype(bool)
+        cross &= frame['Tradable'].astype(bool)
     vol = frame['Volume']
-    return pd.DataFrame({'hit': hit, 'spread': spread.shift(1) * 100,
+    return pd.DataFrame({'cross': cross, 'up60': up60, 'up120': up120, 'hit': cross & up60 & up120,
+                         'spread': spread.shift(1) * 100,
                          'volume': vol / vol.rolling(20).mean().shift(1)}, index=frame.index)
 
 

@@ -11,8 +11,9 @@ class Stock {
   List<Snap>? seq;
 
   /// Moving-average breakout on the signal day (worked out by the scan): the four averages'
-  /// spread the day before (% of the close) and the day's volume ÷ its 20-day average.
-  (double, double)? maBreak;
+  /// spread the day before (% of the close), the day's volume ÷ its 20-day average, and whether
+  /// the 60- and 120-day averages are rising (the settings pick which of those must hold).
+  ({double spread, double volume, bool up60, bool up120})? maBreak;
 
   /// Signal-day volume ÷ the previous trading day's (NaN if unknown).
   double volumeTimes = double.nan;
@@ -30,8 +31,14 @@ class Stock {
       ..change = value(o['chg'])
       ..volume = value(o['vol'])
       ..dv20 = value(o['dv20']);
-    final mab = o['mab'];
-    if (mab is List && mab.length >= 2) s.maBreak = (value(mab[0]), value(mab[1]));
+    // `mb` (every breakout, with the rising flags); older snapshots only have `mab`, which is a
+    // breakout with both long averages rising.
+    final mb = o['mb'], mab = o['mab'];
+    if (mb is List && mb.length >= 4) {
+      s.maBreak = (spread: value(mb[0]), volume: value(mb[1]), up60: mb[2] == 1, up120: mb[3] == 1);
+    } else if (mab is List && mab.length >= 2) {
+      s.maBreak = (spread: value(mab[0]), volume: value(mab[1]), up60: true, up120: true);
+    }
     s.volumeTimes = value(o['vr']);
     final first = o['rsi'];
     if (first is List && first.length >= 2) {

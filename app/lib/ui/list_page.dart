@@ -807,7 +807,7 @@ class ListPageState extends State<ListPage> {
           child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
             Text('$n', style: t.headlineSmall!.copyWith(color: n == 0 ? p.flat : p.side(k.buySide))),
             Text('${k.label}${signals.alerting(k) ? ' · 알림' : ''}', style: t.bodySmall),
-            if (moved > 0) Text('겹침 칸에 $moved', style: t.labelSmall!.copyWith(color: muted)),
+            if (moved > 0) Text('높음 이상 칸에 $moved', style: t.labelSmall!.copyWith(color: muted)),
           ]),
         ),
       );

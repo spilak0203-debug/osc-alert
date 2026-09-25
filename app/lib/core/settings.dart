@@ -28,6 +28,8 @@ class Settings extends ChangeNotifier {
   static const alertMa = 'alertMa', alertCombo = 'alertCombo';
   // Two of three indicators count as a signal (off: all three are needed)
   static const pairSignals = 'pairSignals';
+  // Moving-average breakout: the 60- / 120-day average must be rising
+  static const maUp60 = 'maUp60', maUp120 = 'maUp120';
   // Summary: the oversold/overbought groups are unfolded
   static const showZones = 'showZones';
   static const preMarket = 'preMarket', quietDays = 'quietDays';
@@ -65,6 +67,7 @@ class Settings extends ChangeNotifier {
       case alertZoneOut:
       case alertMa:
       case showZones:
+      case pairSignals:
       case preMarket:
       case quietDays:
       case copyName:
@@ -148,6 +151,11 @@ class Settings extends ChangeNotifier {
 
   String get market => string(filterMarket, 'all');
 
+  /// "둘 다", "60일선", "120일선" or "안 봄": which rising long averages a breakout needs.
+  String get maRising => flag(maUp60) ? (flag(maUp120) ? 'both' : '60') : (flag(maUp120) ? '120' : 'none');
+
+  static const maRisingLabels = {'both': '60·120일선 둘 다', '60': '60일선만', '120': '120일선만', 'none': '안 봄'};
+
   /// Whether a stock passes the user's filter.
   bool passes(Stock s) {
     final m = market;
@@ -180,6 +188,8 @@ class Settings extends ChangeNotifier {
       ..cciLevel = number(cciLevel);
     r.window = integer(windowKey).clamp(0, maxWindow);
     r.pairs = flag(pairSignals);
+    r.maUp60 = flag(maUp60);
+    r.maUp120 = flag(maUp120);
     return r;
   }
 

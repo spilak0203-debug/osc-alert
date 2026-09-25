@@ -56,7 +56,8 @@ class MaBreakout(unittest.TestCase):
         closes = [101.0 - i * 0.01 for i in range(130)] + [102.0]
         mb = ind.ma_breakout(self.frame(closes))
         self.assertLess(mb.spread.iloc[-1], ind.MA_SPREAD * 100)   # 모이기는 했다
-        self.assertFalse(mb.hit.iloc[-1])
+        self.assertTrue(mb.cross.iloc[-1])                           # 돌파도 했지만
+        self.assertFalse(mb.up120.iloc[-1] or mb.hit.iloc[-1])       # 120일선이 내려가는 중
 
 
 class Session(unittest.TestCase):

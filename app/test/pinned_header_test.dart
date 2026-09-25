@@ -14,7 +14,7 @@ Stock stock(int i, {bool surge = false, bool ma = false}) {
     ..market = '코스피'
     ..dv20 = 1e9
     ..volumeTimes = surge ? 4 : 1;
-  if (ma) s.maBreak = (1.0, 1.0);
+  if (ma) s.maBreak = (spread: 1.0, volume: 1.0, up60: true, up120: true);
   return s;
 }
 
@@ -31,7 +31,7 @@ void main() {
     await tester.pump();
 
     // Well into the volume-surge section: its title is pinned, the first rows are gone.
-    await tester.drag(find.byType(ListPage), const Offset(0, -3200));
+    await tester.drag(find.byType(ListPage), const Offset(0, -3700));
     await tester.pumpAndSettle();
     expect(find.text('종목030'), findsNothing);
     final pinned = find.text('거래량 급증 (전일 3배↑)');
@@ -75,8 +75,9 @@ void main() {
     await tester.pump();
     // Listed once, under the 2-signal overlap; the breakout and surge tiles still count it.
     expect(find.text('종목001'), findsOneWidget);
-    expect(find.text('신호 2개 겹침'), findsWidgets);
-    expect(find.text('겹침 칸에 1'), findsNWidgets(2));
+    expect(find.text('강도 높음 (신호 2개)'), findsWidgets);
+    expect(find.text('높음'), findsOneWidget); // the row's chip
+    expect(find.text('높음 이상 칸에 1'), findsNWidgets(2));
     expect(find.text('이평선 밀집 돌파'), findsOneWidget); // the tile only: no section of its own
   });
 }

@@ -17,7 +17,7 @@ Map<String, dynamic> row([List<num>? mab]) => {
 void main() {
   test('mab becomes a breakout hit with the volume', () {
     final s = Stock.parse(row([1.87, 1.78]));
-    expect(s.maBreak, (1.87, 1.78));
+    expect(s.maBreak, (spread: 1.87, volume: 1.78, up60: true, up120: true));
     final hits = hitsFor(s, RuleConfig(), 1);
     expect(hits.map((h) => h.kind), [Kind.maBreak]);
     expect(hits.single.describe(), '이평선 밀집 돌파');
@@ -63,6 +63,23 @@ void main() {
       ..rsiBand = false;
     expect(hitsFor(s, c, 3).map((h) => h.kind), [Kind.gold2]);
     expect(hitsFor(s, c..pairs = false, 3), isEmpty);
+  });
+
+  test('the long-average condition comes from the settings', () {
+    // A breakout with the 60-day average rising and the 120-day one falling.
+    final s = Stock.parse({...row(), 'mb': [1.2, 1.0, 1, 0]});
+    expect(hitsFor(s, RuleConfig(), 1), isEmpty); // default: both must rise
+    expect(hitsFor(s, RuleConfig()..maUp120 = false, 1).map((h) => h.kind), [Kind.maBreak]);
+    expect(hitsFor(s, RuleConfig()..maUp60 = false, 1), isEmpty);
+    expect(hitsFor(s, RuleConfig()..maUp60 = false..maUp120 = false, 1).map((h) => h.kind), [Kind.maBreak]);
+  });
+
+  test('chart: falling long averages are marked once the condition is off', () {
+    final close = [for (var i = 0; i < 130; i++) 101.0 - i * 0.01, 102.0];
+    final ma = [for (final n in maPeriods) sma(close, n)];
+    final volume = List.filled(close.length, 1e7);
+    expect(maBreakouts(ma, close, volume).last, isFalse);
+    expect(maBreakouts(ma, close, volume, up60: false, up120: false).last, isTrue);
   });
 
   test('no mab, no breakout', () {

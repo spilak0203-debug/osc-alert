@@ -64,7 +64,7 @@ class StockTile extends StatelessWidget {
                 Padding(
                   padding: const EdgeInsets.only(top: 4),
                   child: Wrap(spacing: 4, runSpacing: 4, children: [
-                    if (stacked >= 2) _Chip('$stacked개 겹침', p.side(true), solid: true),
+                    if (stacked >= 2) _Chip(stacked >= 3 ? '매우 높음' : '높음', p.side(true), solid: true),
                     for (final h in chips) _Chip(h.chip(), p.side(h.kind.buySide)),
                   ]),
                 ),

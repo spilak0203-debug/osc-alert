@@ -24,9 +24,9 @@ class SettingsPage extends StatefulWidget {
 
 /// The settings page's groups, in order.
 enum _Group {
+  rules('신호 조건', Icons.tune),
   alerts('알림', Icons.notifications_outlined),
   filter('종목 필터', Icons.filter_alt_outlined),
-  rules('신호 조건', Icons.tune),
   display('화면', Icons.palette_outlined),
   app('앱', Icons.info_outline);
 
@@ -42,9 +42,8 @@ class _SettingsPageState extends State<SettingsPage> {
   Release? _release;
   bool _checking = false;
 
-  /// The indicator rules are rarely changed, so their card starts folded.
-  bool _rulesOpen = false;
-  final _keys = {for (final g in _Group.values) g: GlobalKey()};
+  /// Every card starts folded to one summary line; these are the open ones.
+  final _open = <_Group>{};
 
   Settings get st => Settings.I;
 
@@ -66,8 +65,9 @@ class _SettingsPageState extends State<SettingsPage> {
 
     final alerts = <Widget>[
       sub('받을 신호'),
-      _toggle(Settings.alertCombo, '신호 겹침', '거래량 급증(전일 3배)·골든 교차${pairs ? '(2지표 이상)' : '(3지표)'}·이평선 밀집 돌파 중 둘 이상'),
-      _toggle(Settings.alertMa, '이평선 밀집 돌파', '5·20·60·120일선이 1.5% 안에 모였다가 종가가 넷 다 위로 올라선 날 (60·120일선 상승 중)'),
+      _toggle(Settings.alertCombo, '강도 높음 이상', '거래량 급증(전일 3배)·골든 교차${pairs ? '(2지표 이상)' : '(3지표)'}·이평선 밀집 돌파 중 2개면 높음, 3개면 매우 높음'),
+      _toggle(Settings.alertMa, '이평선 밀집 돌파', '5·20·60·120일선이 1.5% 안에 모였다가 종가가 넷 다 위로 올라선 날'
+          '${st.maRising == 'none' ? '' : ' (${Settings.maRisingLabels[st.maRising]} 상승 중)'}'),
       _toggle(Settings.alert3, '3지표 일치', '스토캐스틱·RSI·CCI가 모두 골든(또는 데드)크로스'),
       if (pairs) _toggle(Settings.alert2, '2지표 일치', '셋 중 둘만 일치해도 따로 알림'),
       _toggle(Settings.alertZoneIn, '과매도·과매수 진입', "'신호 조건'의 구간 판단 지표 수 이상이 구간에 새로 들어온 날"),
@@ -111,7 +111,7 @@ class _SettingsPageState extends State<SettingsPage> {
     final rules = <Widget>[
       sub('일치 판단'),
       _toggle(Settings.pairSignals, '2지표 일치도 신호로 보기',
-          '끄면 스토캐스틱·RSI·CCI 셋이 모두 맞을 때만 골든·데드 신호. 요약 분류·신호 겹침·알림·차트에 모두 적용'),
+          '켜면 셋 중 둘만 맞아도 골든·데드 신호. 끄면 스토캐스틱·RSI·CCI 셋이 모두 맞을 때만. 요약 분류·신호 강도·알림·차트에 모두 적용'),
       label('허용 기간 · 신호일과 그 앞 며칠 안에 교차하면 같이 센다'),
       _choice('${st.integer(Settings.windowKey)}', [for (var d = 0; d <= rule.maxWindow; d++) ['$d', d == 0 ? '당일' : '$d일']],
           (v) => st.setInteger(Settings.windowKey, int.parse(v))),
@@ -129,14 +129,13 @@ class _SettingsPageState extends State<SettingsPage> {
       sub('CCI (20)'),
       _toggle(Settings.cciBand, '밴드 조건 사용', '켜면 ±기준선 돌파, 끄면 0선 돌파'),
       _numbers(Settings.cciLevel, '기준선 (±)', null, null),
+      sub('이평선 밀집 돌파'),
+      label('장기선 상승 조건 · 고른 선이 5거래일 전보다 낮지 않을 때만 신호'),
+      _choice(st.maRising, const [['both', '둘 다'], ['60', '60일선만'], ['120', '120일선만'], ['none', '안 봄']], (v) {
+        st.setFlag(Settings.maUp60, v == 'both' || v == '60');
+        st.setFlag(Settings.maUp120, v == 'both' || v == '120');
+      }),
     ];
-    // What the folded rule card says about itself.
-    String band(String key) => st.flag(key) ? '켬' : '끔';
-    final ruleSummary = '${pairs ? '2지표도 신호' : '3지표만 신호'} · 허용 기간 '
-        '${st.integer(Settings.windowKey) == 0 ? '당일' : '${st.integer(Settings.windowKey)}일'} · '
-        '스토캐스틱 ${st.flag(Settings.stochSlow) ? 'Slow' : 'Fast'} · 밴드 조건 스토캐스틱 ${band(Settings.stochBand)}·'
-        'RSI ${band(Settings.rsiBand)}·CCI ${band(Settings.cciBand)}';
-
     final display = <Widget>[
       label('테마'),
       _choice(st.theme, const [['system', '기기 설정'], ['light', '라이트'], ['dark', '다크']],
@@ -171,32 +170,50 @@ class _SettingsPageState extends State<SettingsPage> {
       _button('버전 기록 보기', false, () => showChangelog(context)),
     ];
 
+    // What each folded card says about itself.
+    String onOff(String key) => st.flag(key) ? '켬' : '끔';
+    String amount(String key, String none) {
+      final v = st.prefs.getDouble(key) ?? 0;
+      return v <= 0 ? none : '${v >= 10000 ? '${(v / 10000).toStringAsFixed(0)}조' : v >= 1000 ? '${(v / 1000).toStringAsFixed(0)}천억' : '${v.toStringAsFixed(0)}억'}↑';
+    }
+
+    final window = st.integer(Settings.windowKey);
+    final alertNames = [
+      if (st.flag(Settings.alertCombo)) '강도 높음 이상',
+      if (st.flag(Settings.alertMa)) '이평선 돌파',
+      if (st.flag(Settings.alert3)) '3지표',
+      if (pairs && st.flag(Settings.alert2)) '2지표',
+      if (st.flag(Settings.alertZoneIn)) '과매도·과매수 진입',
+      if (st.flag(Settings.alertZoneOut)) '과매도·과매수 탈출',
+    ];
+    final summaries = {
+      _Group.rules: '${pairs ? '2지표도 신호' : '3지표만 신호'} · 허용 기간 ${window == 0 ? '당일' : '$window일'} · '
+          '스토캐스틱 ${st.flag(Settings.stochSlow) ? 'Slow' : 'Fast'} · 밴드 조건 스토캐스틱 ${onOff(Settings.stochBand)}·'
+          'RSI ${onOff(Settings.rsiBand)}·CCI ${onOff(Settings.cciBand)} · 이평선 돌파 장기선 ${Settings.maRisingLabels[st.maRising]}',
+      _Group.alerts: alertNames.isEmpty ? '받을 알림 없음' : '받음: ${alertNames.join(' · ')}',
+      _Group.filter: '${st.market == 'all' ? '전체 시장' : st.market} · 거래대금 ${amount(Settings.filterDv, '제한 없음')} · '
+          '시총 ${amount(Settings.filterCap, '제한 없음')}',
+      _Group.display: '테마 ${const {'system': '기기 설정', 'light': '라이트', 'dark': '다크'}[st.theme] ?? st.theme} · '
+          '글자 ${(st.fontScale * 100).round()}% · 복사 ${st.flag(Settings.copyName) ? '종목명' : '종목코드'}'
+          '${Desktop.supported ? ' · 트레이 ${onOff(Settings.trayOnClose)}' : ''}',
+      _Group.app: '현재 버전 ${AppUpdate.versionName}${newer ? ' · 새 버전 ${_release!.name} 있음' : ''}',
+    };
     final groups = {
+      _Group.rules: rules,
       _Group.alerts: alerts,
       _Group.filter: filter,
-      _Group.rules: rules,
       _Group.display: display,
       _Group.app: app,
     };
     return ListView(
       controller: widget.controller,
-      padding: const EdgeInsets.fromLTRB(12, 4, 12, 32),
+      padding: const EdgeInsets.fromLTRB(12, 0, 12, 32),
       children: [
         Center(
           child: ConstrainedBox(
             constraints: const BoxConstraints(maxWidth: 720),
             child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-              // Jump to a group.
-              Wrap(spacing: 6, runSpacing: 6, children: [
-                for (final g in _Group.values)
-                  ActionChip(
-                    avatar: Icon(g.icon, size: 18),
-                    label: Text(g.label(Desktop.supported)),
-                    onPressed: () => _goTo(g),
-                  ),
-              ]),
-              for (final e in groups.entries)
-                _card(context, e.key, e.value, folded: e.key == _Group.rules && !_rulesOpen, summary: ruleSummary),
+              for (final e in groups.entries) _card(context, e.key, e.value, summaries[e.key]!),
             ]),
           ),
         ),
@@ -204,45 +221,43 @@ class _SettingsPageState extends State<SettingsPage> {
     );
   }
 
-  /// One group in a card: icon and title, then its rows. The rule card folds to one summary line.
-  Widget _card(BuildContext context, _Group g, List<Widget> children, {bool folded = false, String? summary}) {
+  /// One group in a card: icon and title, then its rows — or, folded, one line saying how it is set.
+  Widget _card(BuildContext context, _Group g, List<Widget> children, String summary) {
     final t = Theme.of(context).textTheme;
     final cs = Theme.of(context).colorScheme;
-    final foldable = g == _Group.rules;
-    final head = Padding(
-      padding: const EdgeInsets.fromLTRB(16, 14, 12, 4),
-      child: Row(children: [
-        Icon(g.icon, color: cs.primary),
-        const SizedBox(width: 10),
-        Expanded(child: Text(g.label(Desktop.supported), style: t.titleMedium!.copyWith(fontWeight: FontWeight.w700))),
-        if (foldable) ...[
-          Text(folded ? '펼치기' : '접기', style: t.labelLarge!.copyWith(color: cs.onSurfaceVariant)),
-          Icon(folded ? Icons.expand_more : Icons.expand_less, color: cs.onSurfaceVariant),
-        ],
-      ]),
-    );
+    final open = _open.contains(g);
     return Card.filled(
-      key: _keys[g],
       margin: const EdgeInsets.only(top: 12),
       clipBehavior: Clip.antiAlias,
       child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-        if (foldable) InkWell(onTap: () => setState(() => _rulesOpen = folded), child: head) else head,
-        Padding(
-          padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
-          child: folded
-              ? Text(summary ?? '', style: t.bodySmall!.copyWith(color: cs.onSurfaceVariant))
-              : Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: children),
+        InkWell(
+          onTap: () => setState(() => open ? _open.remove(g) : _open.add(g)),
+          child: Padding(
+            padding: const EdgeInsets.fromLTRB(16, 14, 12, 14),
+            child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Icon(g.icon, color: cs.primary),
+              const SizedBox(width: 10),
+              Expanded(
+                child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                  Text(g.label(Desktop.supported), style: t.titleMedium!.copyWith(fontWeight: FontWeight.w700)),
+                  if (!open)
+                    Padding(
+                      padding: const EdgeInsets.only(top: 2),
+                      child: Text(summary, style: t.bodySmall!.copyWith(color: cs.onSurfaceVariant)),
+                    ),
+                ]),
+              ),
+              Icon(open ? Icons.expand_less : Icons.expand_more, color: cs.onSurfaceVariant),
+            ]),
+          ),
         ),
+        if (open)
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+            child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: children),
+          ),
       ]),
     );
-  }
-
-  void _goTo(_Group g) {
-    if (g == _Group.rules && !_rulesOpen) setState(() => _rulesOpen = true);
-    WidgetsBinding.instance.addPostFrameCallback((_) {
-      final c = _keys[g]?.currentContext;
-      if (c != null) Scrollable.ensureVisible(c, duration: const Duration(milliseconds: 250), curve: Curves.easeOut);
-    });
   }
 
   Future<void> _update(bool newer) async {

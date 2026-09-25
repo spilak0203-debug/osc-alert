@@ -14,8 +14,8 @@ const double surgeLiquidity = 5e8;
 /// Dashboard order. The three rising signals (volume surge, golden crossing, moving-average
 /// breakout) are stacked: a stock with two or three of them is filed under the overlap only.
 enum Kind {
-  combo3('신호 3개 겹침', true, 'COMBO3'),
-  combo2('신호 2개 겹침', true, 'COMBO2'),
+  combo3('강도 매우 높음 (신호 3개)', true, 'COMBO3'),
+  combo2('강도 높음 (신호 2개)', true, 'COMBO2'),
   maBreak('이평선 밀집 돌파', true, 'MA_BREAK'),
   gold3('골든 3지표 일치', true, 'GOLD3'),
   gold2('골든 2지표 일치', true, 'GOLD2'),
@@ -120,7 +120,8 @@ List<Hit> hitsFor(Stock s, RuleConfig c, int zoneNeed) {
       out.add(Hit(Kind.gold2, m[0]));
     }
   }
-  if (s.maBreak != null) out.add(Hit(Kind.maBreak, null));
+  final mb = s.maBreak;
+  if (mb != null && (!c.maUp60 || mb.up60) && (!c.maUp120 || mb.up120)) out.add(Hit(Kind.maBreak, null));
   if (m == null) return out;
   final d = count(m[1]);
   if (d == 3) {

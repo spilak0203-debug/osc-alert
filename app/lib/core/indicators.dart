@@ -39,12 +39,14 @@ Series compute(List<double> high, List<double> low, List<double> close) {
 
 /// Moving-average breakout, as the scan marks it (`ma_breakout` in signal/indicators.py): the
 /// day before, the four averages sat within `maSpread` of the close; today the close is above
-/// all four for the first time; the 60- and 120-day averages are not lower than `maSlope` days
-/// ago; and the stock trades at least `maLiquidity` won a day (20-day average before today).
+/// all four for the first time; the 60- and/or 120-day average (as `up60`/`up120` ask) is not
+/// lower than `maSlope` days ago; and the stock trades at least `maLiquidity` won a day
+/// (20-day average before today).
 const double maSpread = 0.015, maLiquidity = 5e8;
 const int maSlope = 5;
 
-List<bool> maBreakouts(List<List<double>> ma, List<double> close, List<double> volume) {
+List<bool> maBreakouts(List<List<double>> ma, List<double> close, List<double> volume,
+    {bool up60 = true, bool up120 = true}) {
   final n = close.length;
   final out = List<bool>.filled(n, false);
   double top(int i) => [for (final m in ma) m[i]].reduce((a, b) => a > b ? a : b);
@@ -57,7 +59,7 @@ List<bool> maBreakouts(List<List<double>> ma, List<double> close, List<double> v
     if (!(dv20[i - 1] >= maLiquidity)) continue;
     final gathered = (top(i - 1) - bottom(i - 1)) / close[i - 1] <= maSpread;
     final crossed = close[i] > top(i) && close[i - 1] <= top(i - 1);
-    final rising = ma[2][i] >= ma[2][i - maSlope] && ma[3][i] >= ma[3][i - maSlope];
+    final rising = (!up60 || ma[2][i] >= ma[2][i - maSlope]) && (!up120 || ma[3][i] >= ma[3][i - maSlope]);
     out[i] = gathered && crossed && rising;
   }
   return out;
