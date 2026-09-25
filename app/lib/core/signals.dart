@@ -13,18 +13,19 @@ enum Kind {
   oversoldIn('과매도 진입', true),
   oversoldOut('과매도 탈출', true),
   overboughtIn('과매수 진입', false),
-  overboughtOut('과매수 탈출', false);
+  overboughtOut('과매수 탈출', false),
+  maBreak('이평선 밀집 돌파', true);
 
   const Kind(this.label, this.buySide);
 
   final String label;
   final bool buySide;
 
-  bool get zone => index >= Kind.oversoldIn.index;
+  bool get zone => index >= Kind.oversoldIn.index && index <= Kind.overboughtOut.index;
 
   /// The Java app's enum constant, used in notification payloads.
   String get legacyName => const [
-        'GOLD3', 'DEAD3', 'GOLD2', 'DEAD2', 'OVERSOLD_IN', 'OVERSOLD_OUT', 'OVERBOUGHT_IN', 'OVERBOUGHT_OUT'
+        'GOLD3', 'DEAD3', 'GOLD2', 'DEAD2', 'OVERSOLD_IN', 'OVERSOLD_OUT', 'OVERBOUGHT_IN', 'OVERBOUGHT_OUT', 'MA_BREAK'
       ][index];
 
   static Kind? byName(String? name) {
@@ -37,14 +38,18 @@ enum Kind {
 
 /// What one stock did on the signal day.
 class Hit {
-  Hit(this.kind, this.parts);
+  Hit(this.kind, this.parts, [this.note]);
 
   final Kind kind;
+
+  /// Extra detail after the label, e.g. the volume on a moving-average breakout.
+  final String? note;
 
   /// For 2-of-3: which indicators matched.
   final List<bool>? parts;
 
   String describe() {
+    if (note != null) return '${kind.label} ($note)';
     if (kind != Kind.gold2 && kind != Kind.dead2) return kind.label;
     return '${kind.label} (${which(parts!)})';
   }
@@ -75,6 +80,8 @@ List<Hit> hitsFor(Stock s, RuleConfig c, int zoneNeed) {
   if (now[0] < zoneNeed && before[0] >= zoneNeed) out.add(Hit(Kind.oversoldOut, null));
   if (now[1] >= zoneNeed && before[1] < zoneNeed) out.add(Hit(Kind.overboughtIn, null));
   if (now[1] < zoneNeed && before[1] >= zoneNeed) out.add(Hit(Kind.overboughtOut, null));
+  final mb = s.maBreak;
+  if (mb != null) out.add(Hit(Kind.maBreak, null, mb.$2.isNaN ? null : '거래량 ${mb.$2.toStringAsFixed(1)}배'));
   return out;
 }
 
@@ -111,6 +118,8 @@ bool alerting(Kind k) {
     case Kind.oversoldIn:
     case Kind.overboughtIn:
       return st.flag(Settings.alertZoneIn);
+    case Kind.maBreak:
+      return st.flag(Settings.alertMa);
     default:
       return st.flag(Settings.alertZoneOut);
   }

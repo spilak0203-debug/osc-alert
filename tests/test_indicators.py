@@ -35,6 +35,30 @@ class MatchesOriginal(unittest.TestCase):
         self.assertGreater(int(ev.stoch_gold.sum()), int(ev.golden.sum()))
 
 
+class MaBreakout(unittest.TestCase):
+    @staticmethod
+    def frame(closes):
+        idx = pd.bdate_range('2026-01-01', periods=len(closes))
+        c = pd.Series(closes, index=idx, dtype=float)
+        return pd.DataFrame({'Open': c, 'High': c, 'Low': c, 'Close': c, 'Volume': 1000.0})
+
+    def test_flat_then_break(self):
+        mb = ind.ma_breakout(self.frame([100.0] * 130 + [104.0]))
+        self.assertEqual(list(mb.index[mb.hit]), [mb.index[-1]])
+
+    def test_needs_convergence(self):
+        # 이평선이 넓게 벌어진 채(급락 뒤) 올라서는 날은 아니다
+        mb = ind.ma_breakout(self.frame([200.0] * 100 + [100.0] * 30 + [104.0]))
+        self.assertFalse(mb.hit.any())
+
+    def test_needs_rising_long_lines(self):
+        # 오래 내려온 종목: 이평선이 모여도 120일선이 내려가는 중이면 아니다
+        closes = [103.0 - i * 0.025 for i in range(130)] + [104.0]
+        mb = ind.ma_breakout(self.frame(closes))
+        self.assertLess(mb.spread.iloc[-1], ind.MA_SPREAD * 100)   # 모이기는 했다
+        self.assertFalse(mb.hit.iloc[-1])
+
+
 class Session(unittest.TestCase):
     def test_partial_bar_dropped_before_close(self):
         at = lambda h, m: pd.Timestamp(2026, 9, 24, h, m, tz=scan.SEOUL).to_pydatetime()  # 목요일

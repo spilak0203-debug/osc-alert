@@ -207,6 +207,11 @@ def market_row(ticker, info, f, day):
         row['vol'] = num(f.Volume.iloc[-1], 0)
     dv20 = f.DollarVolume.rolling(20).mean().shift(1)
     row['dv20'] = num(dv20.iloc[at], 0) if at >= 0 else None
+    mb = ind.ma_breakout(f)
+    # 이평선 밀집 돌파: [전날 이평선 폭 %, 거래량 배수]. 스팩은 공모가 근처에 붙어 있어 늘 밀집이고,
+    # 거래가 적은 종목은 신호가 흔들리므로 백테스트와 같이 거래대금 5억 이상만.
+    if (at >= 0 and mb.hit.iloc[at] and dv20.iloc[at] >= LIQUIDITY and '스팩' not in info['name']):
+        row['mab'] = [num(mb.spread.iloc[at], 2), num(mb.volume.iloc[at], 2)]
     if at >= 1:
         lo = max(0, at - rl.HISTORY + 1)
         for key in SNAP_KEYS:
@@ -292,6 +297,8 @@ def main():
           f"(실패 {payload['failed']})")
     print(f"골든 일치 {len(payload['golden'])}건 (거래대금 5억↑ {len(liquid)}건) · "
           f"데드 일치 {len(payload['dead'])}건")
+    mab = [r for r in market['stocks'] if 'mab' in r]
+    print(f"이평선 밀집 돌파 {len(mab)}건: " + ', '.join(r['n'] for r in mab[:20]))
     for label, key in (('골든', 'golden'), ('데드', 'dead')):
         for r in payload[key][:30]:
             print(f"  [{label}] {r['ticker']} {r['name']:<12} {r['close']:>10,.0f}원  "

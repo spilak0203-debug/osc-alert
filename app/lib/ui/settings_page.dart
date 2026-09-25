@@ -50,6 +50,7 @@ class _SettingsPageState extends State<SettingsPage> {
     rows.add(_toggle(Settings.alert2, '2지표 일치 알림', '셋 중 둘만 일치해도 따로 알림'));
     rows.add(_toggle(Settings.alertZoneIn, '과매도·과매수 진입 알림', "아래 '구간 판단 지표 수' 이상이 구간에 새로 들어온 날"));
     rows.add(_toggle(Settings.alertZoneOut, '과매도·과매수 탈출 알림', '구간에 있던 지표가 빠져나온 날'));
+    rows.add(_toggle(Settings.alertMa, '이평선 밀집 돌파 알림', '5·20·60·120일선이 3% 안에 모였다가 종가가 넷 다 위로 올라선 날 (60·120일선 상승 중)'));
     rows.add(_toggle(Settings.preMarket, '장 시작 전에도 알림', '다음 거래일 08시대에 같은 알림을 한 번 더'));
     rows.add(_toggle(Settings.quietDays, '신호 없는 날에도 알림', '켜진 알림 종류에 맞는 종목이 없다는 알림'));
 

@@ -10,6 +10,10 @@ class Stock {
   /// Indicator values for the last few days up to the signal day, oldest first; null if not traded.
   List<Snap>? seq;
 
+  /// Moving-average breakout on the signal day (worked out by the scan): the four averages'
+  /// spread the day before (% of the close) and the day's volume ÷ its 20-day average.
+  (double, double)? maBreak;
+
   // Live quote (NaN until fetched)
   double livePrice = double.nan, liveChange = double.nan, liveVolume = double.nan;
 
@@ -23,6 +27,8 @@ class Stock {
       ..change = value(o['chg'])
       ..volume = value(o['vol'])
       ..dv20 = value(o['dv20']);
+    final mab = o['mab'];
+    if (mab is List && mab.length >= 2) s.maBreak = (value(mab[0]), value(mab[1]));
     final first = o['rsi'];
     if (first is List && first.length >= 2) {
       final n = first.length;
