@@ -53,19 +53,59 @@ class ListPageState extends State<ListPage> {
   bool _far = false;
   List<Object> _list = const [];
 
+  /// Summary: the section title pinned over the top of the list (-1 for none), how far the next
+  /// title pushes it up, and the list's height for turning item edges into pixels.
+  int _pinned = -1;
+  double _pinnedShift = 0;
+  double _viewport = 0;
+  final _pinnedKey = GlobalKey();
+
+  /// Space above a section title's strip in the list, and above the pinned one.
+  static const double _headerGap = 18, _pinnedGap = 4;
+
   /// A group to scroll to once it is on the list (the data may still be loading).
   signals.Kind? _pendingJump;
 
   @override
   void initState() {
     super.initState();
-    _positions.itemPositions.addListener(() {
-      final shown = _positions.itemPositions.value;
-      if (shown.isEmpty) return;
-      final first = shown.where((p) => p.itemTrailingEdge > 0).map((p) => p.index).fold<int>(1 << 30, (a, b) => a < b ? a : b);
-      final far = first > 4;
-      if (far != _far) setState(() => _far = far);
-    });
+    _positions.itemPositions.addListener(_onScroll);
+  }
+
+  void _onScroll() {
+    final shown = _positions.itemPositions.value.where((p) => p.itemTrailingEdge > 0).toList()
+      ..sort((a, b) => a.index.compareTo(b.index));
+    if (shown.isEmpty) return;
+    final far = shown.first.index > 4;
+    final (pinned, shift) = widget.summary ? _pin(shown) : (-1, 0.0);
+    if (far != _far || pinned != _pinned || shift != _pinnedShift) {
+      setState(() {
+        _far = far;
+        _pinned = pinned;
+        _pinnedShift = shift;
+      });
+    }
+  }
+
+  /// The section whose rows are at the top once its own title has scrolled under the pinned
+  /// one, and how far up the next section's title pushes it.
+  (int, double) _pin(List<ItemPosition> shown) {
+    if (_viewport <= 0 || _list.isEmpty) return (-1, 0);
+    var at = -1;
+    for (var i = shown.first.index.clamp(0, _list.length - 1); i >= 0; i--) {
+      if (_list[i] is _Section) {
+        at = i;
+        break;
+      }
+    }
+    if (at < 0) return (-1, 0);
+    final own = shown.where((p) => p.index == at).firstOrNull;
+    if (own != null && own.itemLeadingEdge * _viewport + _headerGap > _pinnedGap) return (-1, 0);
+    final next = shown.where((p) => p.index > at && p.index < _list.length && _list[p.index] is _Section).firstOrNull;
+    if (next == null) return (at, 0);
+    final height = _pinnedKey.currentContext?.size?.height ?? 52;
+    final room = next.itemLeadingEdge * _viewport + _headerGap - height;
+    return (at, room < 0 ? room : 0);
   }
 
   @override
@@ -251,33 +291,55 @@ class ListPageState extends State<ListPage> {
           ),
         if (repo.loading) const LinearProgressIndicator(),
         Expanded(
-          child: RefreshIndicator(
-            onRefresh: () => repo.refresh(!widget.summary),
-            child: ScrollablePositionedList.builder(
-              itemScrollController: _items,
-              itemPositionsListener: _positions,
-              scrollOffsetController: _offsets,
-              physics: const AlwaysScrollableScrollPhysics(),
-              padding: const EdgeInsets.only(bottom: 16),
-              itemCount: items.length,
-              itemBuilder: (context, i) => _item(context, items[i]),
-            ),
-          ),
+          child: LayoutBuilder(builder: (context, box) {
+            _viewport = box.maxHeight;
+            final pinned = _pinned >= 0 && _pinned < items.length && items[_pinned] is _Section ? items[_pinned] as _Section : null;
+            return Stack(children: [
+              RefreshIndicator(
+                onRefresh: () => repo.refresh(!widget.summary),
+                child: ScrollablePositionedList.builder(
+                  itemScrollController: _items,
+                  itemPositionsListener: _positions,
+                  scrollOffsetController: _offsets,
+                  physics: const AlwaysScrollableScrollPhysics(),
+                  padding: const EdgeInsets.only(bottom: 16),
+                  itemCount: items.length,
+                  itemBuilder: (context, i) => _item(context, items[i]),
+                ),
+              ),
+              if (pinned != null)
+                Positioned(
+                  top: _pinnedShift,
+                  left: 0,
+                  right: 0,
+                  child: Container(
+                    key: _pinnedKey,
+                    color: cs.surface,
+                    padding: const EdgeInsets.fromLTRB(0, _pinnedGap, 0, 4),
+                    child: _sectionHeader(context, pinned, margin: const EdgeInsets.symmetric(horizontal: 12)),
+                  ),
+                ),
+            ]);
+          }),
         ),
       ]),
       Positioned(
-        right: 16,
+        left: 0,
+        right: 0,
         bottom: 16,
-        child: AnimatedScale(
-          scale: _far ? 1 : 0,
-          duration: const Duration(milliseconds: 150),
-          child: FloatingActionButton.small(
-            heroTag: widget.summary ? 'top-summary' : 'top-stocks',
-            tooltip: '맨 위로',
-            backgroundColor: cs.secondaryContainer,
-            foregroundColor: cs.onSecondaryContainer,
-            onPressed: _toTop,
-            child: const Icon(Icons.arrow_upward),
+        child: Center(
+          child: AnimatedScale(
+            scale: _far ? 1 : 0,
+            duration: const Duration(milliseconds: 150),
+            child: FloatingActionButton.small(
+              heroTag: widget.summary ? 'top-summary' : 'top-stocks',
+              tooltip: '맨 위로',
+              shape: const CircleBorder(),
+              backgroundColor: cs.secondaryContainer,
+              foregroundColor: cs.onSecondaryContainer,
+              onPressed: _toTop,
+              child: const Icon(Icons.arrow_upward),
+            ),
           ),
         ),
       ),
@@ -429,11 +491,12 @@ class ListPageState extends State<ListPage> {
   }
 
   /// Coloured bar, bold title and a count badge, on a tinted strip so sections stand apart.
-  Widget _sectionHeader(BuildContext context, _Section s) {
+  Widget _sectionHeader(BuildContext context, _Section s,
+      {EdgeInsets margin = const EdgeInsets.fromLTRB(12, _headerGap, 12, 4)}) {
     final t = Theme.of(context).textTheme;
     final color = Palette.of(context).side(s.kind.buySide);
     return Container(
-      margin: const EdgeInsets.fromLTRB(12, 18, 12, 4),
+      margin: margin,
       padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 10),
       decoration: BoxDecoration(color: color.withAlpha(0x1A), borderRadius: BorderRadius.circular(10)),
       child: Row(children: [

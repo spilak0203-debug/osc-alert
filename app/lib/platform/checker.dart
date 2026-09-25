@@ -8,7 +8,8 @@ DateTime seoulNowForChecker() => seoulNow();
 
 /// Every 30 minutes (Android's background job, or the running Windows app): fetch market.json.
 /// When the signal day changes (after the close), evaluate the user's rule and notify. With the
-/// pre-market option, repeat the same alerts once between 08:00 and 09:00 on the next weekday.
+/// pre-market option, repeat the same alerts once between 08:00 and 09:00 on the next trading day —
+/// never on a weekend or KRX holiday morning.
 class Checker {
   static Future<void> check(DateTime now) async {
     final st = Settings.I;
@@ -20,11 +21,11 @@ class Checker {
       await st.prefs.setString(Settings.notified, asof);
       return;
     }
-    final weekday = now.weekday != DateTime.saturday && now.weekday != DateTime.sunday;
+    final open = krxOpen(now);
     final morning = now.hour == 8;
     // Only repeat signals from a previous day — never on the evening they were first sent.
     final fromBefore = asof.compareTo(seoulDate(now)) < 0;
-    if (st.flag(Settings.preMarket) && weekday && morning && fromBefore && asof != st.string(Settings.preMarketSent, '')) {
+    if (st.flag(Settings.preMarket) && open && morning && fromBefore && asof != st.string(Settings.preMarketSent, '')) {
       await Notifier.post(asof, signals.alerts(stocks), '[장 시작 전] ');
       await st.prefs.setString(Settings.preMarketSent, asof);
     }
