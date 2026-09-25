@@ -30,9 +30,23 @@ class _Section {
 
 /// The dashboard's tally of stocks per signal kind.
 class _Counts {
-  _Counts(this.groups);
+  _Counts(this.groups) {
+    // Rising signals whose stocks were moved up into an overlap group: count them too, and
+    // remember which overlap group to go to (the 3-overlap first).
+    for (final combo in [signals.Kind.combo3, signals.Kind.combo2]) {
+      for (final s in groups[combo] ?? const <Stock>[]) {
+        for (final h in signals.hits(s)) {
+          if (!h.kind.rising) continue;
+          inOverlap[h.kind] = (inOverlap[h.kind] ?? 0) + 1;
+          overlapGroup[h.kind] ??= combo;
+        }
+      }
+    }
+  }
 
   final Map<signals.Kind, List<Stock>> groups;
+  final Map<signals.Kind, int> inOverlap = {};
+  final Map<signals.Kind, signals.Kind> overlapGroup = {};
 }
 
 /// Both list tabs. The dashboard shows the indices, the tally and each signal group; the stocks
@@ -737,14 +751,20 @@ class ListPageState extends State<ListPage> {
     final p = Palette.of(context);
     final tiles = <Widget>[];
     for (final k in signals.Kind.values) {
-      final n = counts.groups[k]?.length ?? 0;
+      // Every stock with the signal, those listed under an overlap included; a tap goes to the
+      // signal's own group, or to the overlap group when all of them are there.
+      final own = counts.groups[k]?.length ?? 0;
+      final moved = counts.inOverlap[k] ?? 0;
+      final n = own + moved;
       tiles.add(InkWell(
-        onTap: () => jumpTo(k),
+        onTap: () => jumpTo(own == 0 && moved > 0 ? counts.overlapGroup[k]! : k),
         child: Padding(
           padding: const EdgeInsets.symmetric(horizontal: 4, vertical: 8),
           child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
             Text('$n', style: t.headlineSmall!.copyWith(color: n == 0 ? p.flat : p.side(k.buySide))),
             Text('${k.label}${signals.alerting(k) ? ' · 알림' : ''}', style: t.bodySmall),
+            if (moved > 0)
+              Text('겹침 칸에 $moved', style: t.labelSmall!.copyWith(color: Theme.of(context).colorScheme.onSurfaceVariant)),
           ]),
         ),
       ));

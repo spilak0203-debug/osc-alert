@@ -41,7 +41,7 @@ Series compute(List<double> high, List<double> low, List<double> close) {
 /// day before, the four averages sat within `maSpread` of the close; today the close is above
 /// all four for the first time; the 60- and 120-day averages are not lower than `maSlope` days
 /// ago; and the stock trades at least `maLiquidity` won a day (20-day average before today).
-const double maSpread = 0.03, maLiquidity = 5e8;
+const double maSpread = 0.015, maLiquidity = 5e8;
 const int maSlope = 5;
 
 List<bool> maBreakouts(List<List<double>> ma, List<double> close, List<double> volume) {

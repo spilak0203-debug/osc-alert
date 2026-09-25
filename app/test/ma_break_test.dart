@@ -48,7 +48,7 @@ void main() {
 
   test('chart: no mark without convergence or with falling long averages', () {
     expect(marks([...List.filled(100, 200.0), ...List.filled(30, 100.0), 104.0]).contains(true), isFalse);
-    expect(marks([for (var i = 0; i < 130; i++) 103.0 - i * 0.025, 104.0]).last, isFalse);
+    expect(marks([for (var i = 0; i < 130; i++) 101.0 - i * 0.01, 102.0]).last, isFalse);
   });
 
   test('no mab, no breakout', () {

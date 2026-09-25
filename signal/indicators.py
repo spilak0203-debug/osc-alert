@@ -21,7 +21,7 @@ RSI_N, RSI_SIG = 14, 9
 RSI_LO, RSI_HI = 30, 70
 CCI_N, CCI_BAND = 20, 100
 MA_SPANS = (5, 20, 60, 120)
-MA_SPREAD = 0.03     # 전날 이평선 넷의 폭이 종가의 3% 안
+MA_SPREAD = 0.015    # 전날 이평선 넷의 폭이 종가의 1.5% 안
 MA_SLOPE = 5         # 60·120일선이 5거래일 전보다 낮지 않음
 
 
@@ -53,7 +53,8 @@ def ma_breakout(frame):
     넷 모두 위로 처음 올라서고, 60·120일선이 `MA_SLOPE`거래일 전보다 낮지 않은 날.
 
     `spread`는 전날 이평선 폭(종가 대비 %), `volume`은 오늘 거래량 ÷ 직전 20일 평균.
-    과거 1년 백테스트에서 10거래일 뒤 오른 비율 약 59% (아무 종목·아무 날은 42%)."""
+    과거 1년 백테스트(34건)에서 10거래일 뒤 오른 비율 69% (아무 종목·아무 날은 42%). 3%로 두면
+    거의 안 움직이는 종목이 이평선을 들락거릴 때마다 찍혀 1.5%로 좁혔다."""
     c = frame['Close'].ffill()
     ma = pd.concat([c.rolling(n).mean() for n in MA_SPANS], axis=1, ignore_index=True)
     top = ma.max(axis=1).where(ma.notna().all(axis=1))

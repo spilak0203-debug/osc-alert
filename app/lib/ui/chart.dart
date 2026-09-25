@@ -435,6 +435,7 @@ class _ChartPainter extends CustomPainter {
     _frame();
     _priceTicks(lo, hi);
     _spans();
+    _breakLines();
 
     final w = math.max(1.0, g.step * 0.62);
     final p = colors.p;
@@ -477,28 +478,37 @@ class _ChartPainter extends CustomPainter {
     return '${d.substring(2, 4)}.${d.substring(4, 6)}.${d.substring(6)}';
   }
 
-  /// ▲ under golden matches and ▼ over dead ones: solid for 3 indicators, hollow for 2. ◆ under
-  /// moving-average breakouts (below the ▲ when both fall on one day).
+  /// ▲ under golden matches and ▼ over dead ones: solid for 3 indicators, hollow for 2. A small
+  /// "돌파" at the top of each moving-average breakout's dashed line.
   void _markers(Bars b, double lo, double hi) {
     final m = marks;
     if (m == null) return;
     const size = 5.0;
     for (var i = math.max(1, g.from); i < g.to; i++) {
-      final below = y(b.low[i], lo, hi) + 3;
-      if (m.goldLevel[i] >= 2) _triangle(g.x(i), below, size, true, colors.p.up, m.goldLevel[i] == 3);
+      if (m.goldLevel[i] >= 2) _triangle(g.x(i), y(b.low[i], lo, hi) + 3, size, true, colors.p.up, m.goldLevel[i] == 3);
       if (m.deadLevel[i] >= 2) _triangle(g.x(i), y(b.high[i], lo, hi) - 3, size, false, colors.p.down, m.deadLevel[i] == 3);
-      if (m.maBreak[i]) _diamond(g.x(i), below + (m.goldLevel[i] >= 2 ? size * 1.6 + 3 : 0), size + 1, Palette.maBreak);
+      if (m.maBreak[i]) {
+        const label = '돌파';
+        final w = measure(label, bold: true);
+        final xx = g.x(i) + 3 + w > g.right ? g.x(i) - 3 - w : g.x(i) + 3;
+        text(label, xx, top + sp(12), Palette.maBreak, bold: true);
+      }
     }
   }
 
-  void _diamond(double cx, double tipY, double size, Color color) {
-    final path = Path()
-      ..moveTo(cx, tipY)
-      ..lineTo(cx + size, tipY + size * 1.2)
-      ..lineTo(cx, tipY + size * 2.4)
-      ..lineTo(cx - size, tipY + size * 1.2)
-      ..close();
-    c.drawPath(path, fill(color));
+  /// Dashed violet lines, behind the candles, on moving-average breakout days.
+  void _breakLines() {
+    final m = marks;
+    if (!showSignals || m == null) return;
+    final paint = stroke(Palette.maBreak, 1.2);
+    final dash = sp(4), gap = sp(3);
+    for (var i = math.max(1, g.from); i < g.to; i++) {
+      if (!m.maBreak[i]) continue;
+      final xx = g.x(i);
+      for (var yy = top; yy < bottom; yy += dash + gap) {
+        c.drawLine(Offset(xx, yy), Offset(xx, math.min(yy + dash, bottom)), paint);
+      }
+    }
   }
 
   /// Shaded columns from the first matching crossing to the signal day; darker for 3 indicators.

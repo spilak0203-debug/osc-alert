@@ -15,7 +15,7 @@ class Palette {
   static const grid = Color(0x22888888);
   static const favorite = Color(0xFFF5B301);
 
-  /// ◆ on the candles for moving-average breakouts: apart from the red/blue signal marks and
+  /// The dashed line on moving-average breakout days: apart from the red/blue signal marks and
   /// the average lines.
   static const maBreak = Color(0xFFD946EF);
 

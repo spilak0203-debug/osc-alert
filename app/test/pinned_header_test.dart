@@ -42,4 +42,18 @@ void main() {
     expect(find.text('종목030'), findsOneWidget);
     expect(find.text('종목029'), findsNothing);
   });
+
+  testWidgets('the tally counts stocks moved up into an overlap', (tester) async {
+    SharedPreferences.setMockInitialValues({});
+    await Settings.init();
+    Repo.I.stocks = [stock(1, surge: true, ma: true)];
+    await tester.binding.setSurfaceSize(const Size(420, 1400));
+    await tester.pumpWidget(const MaterialApp(home: Scaffold(body: ListPage(summary: true))));
+    await tester.pump();
+    // Listed once, under the 2-signal overlap; the breakout and surge tiles still count it.
+    expect(find.text('종목001'), findsOneWidget);
+    expect(find.text('신호 2개 겹침'), findsWidgets);
+    expect(find.text('겹침 칸에 1'), findsNWidgets(2));
+    expect(find.text('이평선 밀집 돌파'), findsOneWidget); // the tile only: no section of its own
+  });
 }
