@@ -122,4 +122,54 @@ void main() {
     expect(h.rate(100).isNaN, isTrue);
     expect(Holding('000001', '가', 80).rate(100), closeTo(25, 1e-9));
   });
+
+  test('amounts are grouped as they are typed', () {
+    final f = GroupedDigits();
+    TextEditingValue type(String text) =>
+        f.formatEditUpdate(TextEditingValue.empty, TextEditingValue(text: text, selection: TextSelection.collapsed(offset: text.length)));
+    expect(type('1000000').text, '1,000,000');
+    expect(type('1,000,0000').text, '10,000,000');
+    expect(type('1234.56').text, '1,234.56');
+    expect(type('007').text, '7');
+    expect(type('1000000').selection.baseOffset, 9); // still at the end
+    // Typing in the middle keeps the cursor after the new digit.
+    final mid = f.formatEditUpdate(TextEditingValue.empty,
+        const TextEditingValue(text: '1,0500', selection: TextSelection.collapsed(offset: 4)));
+    expect(mid.text, '10,500');
+    expect(mid.text.substring(0, mid.selection.baseOffset), '10,5');
+  });
+
+  testWidgets('the average field shows the separators and saves the number', (tester) async {
+    Repo.I.stocks = [stock('000001', '가나전자', 12000)];
+    await tester.pumpWidget(MaterialApp(
+      home: Scaffold(body: Builder(builder: (c) => TextButton(onPressed: () => editHolding(c, '000001', '가나전자', 12000), child: const Text('열기')))),
+    ));
+    await tester.tap(find.text('열기'));
+    await tester.pumpAndSettle();
+    await tester.enterText(find.widgetWithText(TextField, '평균 매수가 (선택)'), '1000000');
+    await tester.pump();
+    expect(find.text('1,000,000'), findsOneWidget);
+    await tester.tap(find.text('저장'));
+    await tester.pumpAndSettle();
+    expect(Holdings.of('000001')!.avg, 1000000);
+    await tester.pump(const Duration(seconds: 5));
+  });
+
+  testWidgets('the add button steps aside when scrolling down', (tester) async {
+    Repo.I.stocks = [for (var i = 0; i < 30; i++) stock('0000$i', '종목$i', 1000)];
+    for (var i = 0; i < 30; i++) {
+      await Holdings.put(Holding('0000$i', '종목$i'));
+    }
+    await tester.binding.setSurfaceSize(const Size(420, 800));
+    await tester.pumpWidget(const MaterialApp(home: Scaffold(body: HoldingsPage())));
+    bool shown() => !tester.widget<IgnorePointer>(
+        find.ancestor(of: find.text('종목 추가'), matching: find.byType(IgnorePointer)).first).ignoring;
+    expect(shown(), isTrue);
+    await tester.drag(find.byType(ListView), const Offset(0, -300));
+    await tester.pumpAndSettle();
+    expect(shown(), isFalse);
+    await tester.drag(find.byType(ListView), const Offset(0, 100));
+    await tester.pumpAndSettle();
+    expect(shown(), isTrue);
+  });
 }

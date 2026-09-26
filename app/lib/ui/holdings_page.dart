@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/rendering.dart';
 import 'package:flutter/services.dart';
 
 import '../core/fmt.dart';
@@ -28,6 +29,10 @@ class HoldingsPage extends StatefulWidget {
 class _HoldingsPageState extends State<HoldingsPage> {
   String? _expanded;
 
+  /// The add button steps aside while the list is scrolled down (back on the way up) and while
+  /// a stock's chart is open under its row, so it never sits on the chart or its notes.
+  bool _scrolledDown = false;
+
   @override
   Widget build(BuildContext context) {
     return ListenableBuilder(
@@ -52,12 +57,35 @@ class _HoldingsPageState extends State<HoldingsPage> {
           label: const Text('종목 추가'),
         );
         if (rows.isEmpty) return Stack(children: [_empty(context), Positioned(right: 16, bottom: 16, child: add)]);
+        final hidden = _scrolledDown || (_expanded != null && !widget.wide);
         return Stack(children: [
-          ListView(padding: const EdgeInsets.only(bottom: 96), children: [
-            if (priced.isNotEmpty) _total(context, priced, rows.length),
-            for (final r in rows) _row(context, r.$1, r.$2),
-          ]),
-          Positioned(right: 16, bottom: 16, child: add),
+          NotificationListener<UserScrollNotification>(
+            onNotification: (n) {
+              final down = n.direction == ScrollDirection.reverse
+                  ? true
+                  : n.direction == ScrollDirection.forward
+                      ? false
+                      : _scrolledDown;
+              if (down != _scrolledDown) setState(() => _scrolledDown = down);
+              return false;
+            },
+            child: ListView(padding: const EdgeInsets.only(bottom: 96), children: [
+              if (priced.isNotEmpty) _total(context, priced, rows.length),
+              for (final r in rows) _row(context, r.$1, r.$2),
+            ]),
+          ),
+          Positioned(
+            right: 16,
+            bottom: 16,
+            child: IgnorePointer(
+              ignoring: hidden,
+              child: AnimatedSlide(
+                offset: hidden ? const Offset(0, 2) : Offset.zero,
+                duration: const Duration(milliseconds: 200),
+                child: AnimatedOpacity(opacity: hidden ? 0 : 1, duration: const Duration(milliseconds: 200), child: add),
+              ),
+            ),
+          ),
         ]);
       },
     );
@@ -279,6 +307,36 @@ class _PickStockState extends State<_PickStock> {
   }
 }
 
+/// Keeps a number field grouped as it is typed: "1000000" shows as "1,000,000". Digits and one
+/// decimal point are kept, everything else dropped; the cursor stays after the same digit.
+class GroupedDigits extends TextInputFormatter {
+  static String format(String raw) {
+    final dot = raw.indexOf('.');
+    final whole = (dot < 0 ? raw : raw.substring(0, dot)).replaceFirst(RegExp(r'^0+(?=\d)'), '');
+    final frac = dot < 0 ? '' : '.${raw.substring(dot + 1).replaceAll('.', '')}';
+    final b = StringBuffer();
+    for (var i = 0; i < whole.length; i++) {
+      if (i > 0 && (whole.length - i) % 3 == 0) b.write(',');
+      b.write(whole[i]);
+    }
+    return '$b$frac';
+  }
+
+  @override
+  TextEditingValue formatEditUpdate(TextEditingValue old, TextEditingValue value) {
+    final raw = value.text.replaceAll(RegExp(r'[^0-9.]'), '');
+    final text = format(raw);
+    // How many digits (or the point) were before the cursor, then find that spot again.
+    final cursor = value.selection.baseOffset.clamp(0, value.text.length);
+    final kept = value.text.substring(0, cursor).replaceAll(RegExp(r'[^0-9.]'), '').length;
+    var at = 0;
+    for (var seen = 0; at < text.length && seen < kept; at++) {
+      if (text[at] != ',') seen++;
+    }
+    return TextEditingValue(text: text, selection: TextSelection.collapsed(offset: at));
+  }
+}
+
 class _EditHolding extends StatefulWidget {
   const _EditHolding({required this.ticker, required this.name, required this.price});
 
@@ -295,7 +353,7 @@ class _EditHoldingState extends State<_EditHolding> {
   late final _qty = TextEditingController(text: _old?.hasQty ?? false ? _plain(_old!.qty) : '');
   String? _error;
 
-  static String _plain(double v) => v == v.roundToDouble() ? v.toStringAsFixed(0) : '$v';
+  static String _plain(double v) => GroupedDigits.format(v == v.roundToDouble() ? v.toStringAsFixed(0) : '$v');
 
   /// Blank is NaN (not given); anything else must be a number above 0, or null.
   static double? _number(String text) {
@@ -333,7 +391,7 @@ class _EditHoldingState extends State<_EditHolding> {
 
   @override
   Widget build(BuildContext context) {
-    final digits = [FilteringTextInputFormatter.allow(RegExp(r'[0-9.,]'))];
+    final digits = [GroupedDigits()];
     return AlertDialog(
       title: Text(widget.name),
       content: SizedBox(
