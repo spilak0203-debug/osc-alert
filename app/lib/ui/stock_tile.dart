@@ -413,7 +413,7 @@ class _StockDetailState extends State<StockDetail> {
       padding: const EdgeInsets.only(top: 8),
       child: Text(
         widget.wide
-            ? '휠로 확대 · 끌어서 이동 · 마우스를 올려 값 보기 · 더블클릭하면 처음으로'
+            ? 'Ctrl+휠로 확대 · 끌어서 이동 · 마우스를 올려 값 보기 · 더블클릭하면 처음으로'
             : '두 손가락으로 확대 · 옆으로 밀어 이동 · 탭하거나 길게 눌러 값 보기 · 두 번 탭하면 처음으로',
         style: t.bodySmall!.copyWith(color: muted),
       ),

@@ -72,6 +72,9 @@ class AppUpdate {
     return out.url.isEmpty ? null : out;
   }
 
+  /// The newest release found this run (the quiet check at launch or the settings button).
+  static final found = ValueNotifier<Release?>(null);
+
   static bool newer(Release? r) => r != null && r.code > versionCode;
 
   static Future<void> install(Release r) async {

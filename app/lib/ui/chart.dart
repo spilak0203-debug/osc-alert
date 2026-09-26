@@ -2,6 +2,7 @@ import 'dart:math' as math;
 
 import 'package:flutter/gestures.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 
 import '../core/bars.dart';
 import '../core/fmt.dart';
@@ -97,7 +98,7 @@ _Marks _marksFor(Bars bars, rule.RuleConfig cfg) {
 }
 
 /// One panel of the stock detail: candles with moving averages, volume, or one oscillator.
-/// Two fingers (or the mouse wheel) zoom; a sideways drag scrolls through time; a tap, a long
+/// Two fingers (or Ctrl + the mouse wheel) zoom; a sideways drag scrolls through time; a tap, a long
 /// press then drag, or hovering the mouse shows a day's values; a double tap resets. A vertical
 /// drag is left to the list, so the page still scrolls when the finger starts on a chart.
 class ChartPanel extends StatefulWidget {
@@ -126,7 +127,6 @@ class _ChartPanelState extends State<ChartPanel> {
   bool _crosshair = false;
   double _width = 1;
   int _pointers = 0;
-  double _lastScale = 1;
 
   _Geometry? _geo() {
     final b = widget.bars;
@@ -189,6 +189,30 @@ class _ChartPanelState extends State<ChartPanel> {
   double _panX = 0;
   int _panEnd = 0;
 
+  /// Pinch: bars on screen and the scale when the fingers came down, and the bar (fractional)
+  /// that was under them. Sizes come from the whole gesture's scale, so small moves add up
+  /// instead of each rounding away to no change — which made the zoom stutter.
+  bool _pinching = false;
+  int _pinchShown = 0;
+  double _pinchScale = 1, _pinchBar = 0;
+
+  void _pinch(ScaleUpdateDetails d, _Geometry g) {
+    if (!_pinching) {
+      _pinching = true;
+      _pinchShown = g.shown;
+      _pinchScale = d.scale;
+      _pinchBar = g.from + (d.localFocalPoint.dx - g.left) / g.step;
+    }
+    final size = widget.bars!.size;
+    final shown = (_pinchShown * _pinchScale / d.scale).round().clamp(math.min(minBars, size), size).toInt();
+    final ratio = ((d.localFocalPoint.dx - g.left) / (g.right - g.left)).clamp(0.0, 1.0);
+    final end = _clampEnd((_pinchBar - ratio * shown).round() + shown, shown);
+    if (shown == widget.group.visible && end == widget.group.end) return;
+    widget.group.visible = shown;
+    widget.group.end = end;
+    widget.group.redraw();
+  }
+
   @override
   Widget build(BuildContext context) {
     final scaler = MediaQuery.textScalerOf(context);
@@ -227,12 +251,15 @@ class _ChartPanelState extends State<ChartPanel> {
         ),
       );
       if (widget.bars == null || widget.bars!.size < 2) return SizedBox(height: height, child: chart);
+      // Fingers on the screen, for pinch zoom. Only touches count: a mouse drag always pans.
+      bool touch(PointerEvent e) => e.kind == PointerDeviceKind.touch;
       return Listener(
-        onPointerDown: (_) => _pointers++,
-        onPointerUp: (_) => _pointers = math.max(0, _pointers - 1),
-        onPointerCancel: (_) => _pointers = math.max(0, _pointers - 1),
+        onPointerDown: (e) => touch(e) ? _pointers++ : null,
+        onPointerUp: (e) => touch(e) ? _pointers = math.max(0, _pointers - 1) : null,
+        onPointerCancel: (e) => touch(e) ? _pointers = math.max(0, _pointers - 1) : null,
         onPointerSignal: (e) {
-          if (e is PointerScrollEvent) {
+          // The wheel scrolls the page; Ctrl + wheel zooms the chart.
+          if (e is PointerScrollEvent && HardwareKeyboard.instance.isControlPressed) {
             GestureBinding.instance.pointerSignalResolver.register(e, (event) {
               final s = event as PointerScrollEvent;
               _zoom(s.scrollDelta.dy < 0 ? 1.15 : 1 / 1.15, s.localPosition.dx);
@@ -259,20 +286,23 @@ class _ChartPanelState extends State<ChartPanel> {
               final g = _geo();
               _panX = d.localFocalPoint.dx;
               _panEnd = g?.to ?? 0;
-              _lastScale = 1;
+              _pinching = false;
             },
+            onScaleEnd: (_) => _pinching = false,
             onScaleUpdate: (d) {
               if (_crosshair) return;
               final g = _geo();
               if (g == null) return;
               if (d.pointerCount >= 2 || _pointers >= 2) {
-                final factor = d.scale / _lastScale;
-                _lastScale = d.scale;
-                _zoom(factor, d.localFocalPoint.dx);
+                _pinch(d, g);
                 _panX = d.localFocalPoint.dx;
                 _panEnd = _geo()!.to;
               } else {
-                widget.group.end = _clampEnd(_panEnd + ((_panX - d.localFocalPoint.dx) / g.step).round(), g.shown);
+                // Back to one finger: carry on panning from here.
+                _pinching = false;
+                final end = _clampEnd(_panEnd + ((_panX - d.localFocalPoint.dx) / g.step).round(), g.shown);
+                if (end == widget.group.end) return;
+                widget.group.end = end;
                 widget.group.redraw();
               }
             },

@@ -39,7 +39,7 @@ enum _Group {
 }
 
 class _SettingsPageState extends State<SettingsPage> {
-  Release? _release;
+  Release? get _release => AppUpdate.found.value;
   bool _checking = false;
 
   /// Every card starts folded to one summary line; these are the open ones.
@@ -48,7 +48,8 @@ class _SettingsPageState extends State<SettingsPage> {
   Settings get st => Settings.I;
 
   @override
-  Widget build(BuildContext context) => ListenableBuilder(listenable: st, builder: (context, _) => _build(context));
+  Widget build(BuildContext context) => ListenableBuilder(
+      listenable: Listenable.merge([st, AppUpdate.found]), builder: (context, _) => _build(context));
 
   Widget _build(BuildContext context) {
     final t = Theme.of(context).textTheme;
@@ -272,7 +273,7 @@ class _SettingsPageState extends State<SettingsPage> {
     try {
       final r = await AppUpdate.latest();
       if (!mounted) return;
-      setState(() => _release = r);
+      AppUpdate.found.value = r;
       if (!AppUpdate.newer(r)) Toaster.show('최신 버전입니다');
     } catch (e) {
       Toaster.show('확인 실패: $e', long: true);

@@ -75,17 +75,10 @@ class HomeState extends State<Home> {
     }
   }
 
-  /// Quietly checks GitHub once per launch; a snackbar offers the install when there is a newer build.
+  /// Quietly checks GitHub once per launch; a newer build shows only in the settings' app card.
   Future<void> _offerUpdate() async {
     try {
-      final r = await AppUpdate.latest();
-      if (!AppUpdate.newer(r) || !mounted) return;
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(
-        content: Text('새 버전(${r!.name})이 있습니다'),
-        duration: const Duration(days: 1),
-        behavior: SnackBarBehavior.floating,
-        action: SnackBarAction(label: '설치', onPressed: () => AppUpdate.install(r)),
-      ));
+      AppUpdate.found.value = await AppUpdate.latest();
     } catch (_) {}
   }
 
