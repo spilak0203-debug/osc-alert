@@ -1,6 +1,6 @@
 {
  "asof": "2026-09-23",
- "generated": "2026-09-25T23:41:48+00:00",
+ "generated": "2026-09-26T02:54:38+00:00",
  "scanned": 2633,
  "universe": 2651,
  "failed": 0,
@@ -8,10 +8,32 @@
  "rules": {
   "stochastic": "Slow 5-3-3 · %K/%D 교차 · 직전 %K <20 / >80",
   "rsi": "RSI(14) · 시그널(9) 교차 · 직전 RSI <30 / >70",
-  "cci": "CCI(20) · -100 상향 / +100 하향",
+  "cci": "CCI(14) · -100 상향 / +100 하향",
   "confluence": "세 개가 같은 날 전부"
  },
- "golden": [],
+ "golden": [
+  {
+   "ticker": "214370",
+   "name": "케어젠",
+   "market": "KOSDAQ",
+   "close": 40050.0,
+   "change": 2.56,
+   "k": 23.9,
+   "d": 23.5,
+   "rsi": 30.4,
+   "rsi_sig": 28.0,
+   "cci": -76.7,
+   "dv20": 2755623650.0,
+   "liquid": true,
+   "golden": true,
+   "dead": false,
+   "parts": {
+    "stoch": true,
+    "rsi": true,
+    "cci": true
+   }
+  }
+ ],
  "dead": [
   {
    "ticker": "204270",
@@ -23,8 +45,29 @@
    "d": 77.6,
    "rsi": 63.9,
    "rsi_sig": 66.0,
-   "cci": 85.1,
+   "cci": 96.8,
    "dv20": 21854133051.0,
+   "liquid": true,
+   "golden": false,
+   "dead": true,
+   "parts": {
+    "stoch": true,
+    "rsi": true,
+    "cci": true
+   }
+  },
+  {
+   "ticker": "000430",
+   "name": "대원강업",
+   "market": "KOSPI",
+   "close": 4830.0,
+   "change": -4.36,
+   "k": 73.5,
+   "d": 82.0,
+   "rsi": 60.5,
+   "rsi_sig": 69.3,
+   "cci": 60.5,
+   "dv20": 621909398.0,
    "liquid": true,
    "golden": false,
    "dead": true,
