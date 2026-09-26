@@ -17,6 +17,12 @@ import 'toast.dart';
 
 void openNaver(Stock s) => launchUrl(Uri.parse(s.naverChartUrl()), mode: LaunchMode.externalApplication);
 
+/// The star on a row or the side pane: adds or removes the favourite and says which.
+void toggleFavorite(Stock s) {
+  final now = Settings.I.toggleFavorite(s.ticker);
+  Toaster.show('${s.name}${now ? ' 즐겨찾기에 추가' : ' 즐겨찾기에서 뺌'}');
+}
+
 void copyStock(Stock s) {
   final what = Settings.I.flag(Settings.copyName) ? s.name : s.ticker;
   Clipboard.setData(ClipboardData(text: what));
@@ -72,10 +78,7 @@ class StockTile extends StatelessWidget {
           _IconSpot(
             tooltip: '즐겨찾기 별',
             icon: Icon(fav ? Icons.star : Icons.star_border, color: fav ? Palette.favorite : cs.onSurfaceVariant),
-            onTap: () {
-              final now = Settings.I.toggleFavorite(s.ticker);
-              Toaster.show('${s.name}${now ? ' 즐겨찾기에 추가' : ' 즐겨찾기에서 뺌'}');
-            },
+            onTap: () => toggleFavorite(s),
           ),
           const SizedBox(width: 4),
           _IconSpot(

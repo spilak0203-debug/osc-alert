@@ -43,9 +43,10 @@ class _Counts {
   _Counts(this.groups) {
     // Rising signals whose stocks were moved up into an overlap group: count them too, and
     // remember which overlap group to go to (the 3-overlap first).
+    final of = signals.hitsNow();
     for (final combo in [signals.Kind.combo3, signals.Kind.combo2]) {
       for (final s in groups[combo] ?? const <Stock>[]) {
-        for (final h in signals.hits(s)) {
+        for (final h in of(s)) {
           if (!h.kind.rising) continue;
           inOverlap[h.kind] = (inOverlap[h.kind] ?? 0) + 1;
           overlapGroup[h.kind] ??= combo;
@@ -365,12 +366,8 @@ class ListPageState extends State<ListPage> {
         for (final e in groups.entries) {
           if (e.key.block != block || e.value.isEmpty) continue;
           int key(Stock x) => signals.rank(e.key, x) * 2 + (favs.contains(x.ticker) ? 0 : 1);
-          final indexed = [for (var i = 0; i < e.value.length; i++) (i, e.value[i])]
-            ..sort((a, b) {
-              final c = key(a.$2).compareTo(key(b.$2));
-              return c != 0 ? c : a.$1.compareTo(b.$1);
-            });
-          final group = [for (final x in indexed) x.$2];
+          final group = [...e.value];
+          stableSort<Stock>(group, (a, b) => key(a).compareTo(key(b)));
           final shown = searching ? group.where(matches).toList() : group;
           if (shown.isEmpty) continue;
           inPart.addAll(shown.map((x) => x.ticker));
@@ -696,15 +693,7 @@ class ListPageState extends State<ListPage> {
       default:
         cmp = byCap;
     }
-    // Stable, like Collections.sort.
-    final indexed = [for (var i = 0; i < list.length; i++) (i, list[i])];
-    indexed.sort((x, y) {
-      final c = cmp(x.$2, y.$2);
-      return c != 0 ? c : x.$1.compareTo(y.$1);
-    });
-    for (var i = 0; i < list.length; i++) {
-      list[i] = indexed[i].$2;
-    }
+    stableSort(list, cmp);
   }
 
   /// Korean collation as Java's Collator orders names: digits, then Latin, then Hangul.

@@ -74,6 +74,9 @@ class Hit {
   /// Volume surge: today's volume ÷ the previous trading day's.
   final double? times;
 
+  /// A falling signal (dead crossing): what the holdings alert goes by.
+  bool get falling => kind.block == Block.falling;
+
   /// Full wording, for the detail and notifications.
   String describe() {
     if (kind == Kind.surge) return '거래량 급증 (전일 ${times!.toStringAsFixed(1)}배)';
@@ -139,10 +142,15 @@ List<Hit> hitsFor(Stock s, RuleConfig c, int zoneNeed) {
   return out;
 }
 
-List<Hit> hits(Stock s) {
+/// A stock's hits under the settings as they are now. Reads the settings once, for loops.
+List<Hit> Function(Stock) hitsNow() {
   final st = Settings.I;
-  return hitsFor(s, st.config(), st.integer(Settings.zoneNeed));
+  final c = st.config();
+  final need = st.integer(Settings.zoneNeed);
+  return (s) => hitsFor(s, c, need);
 }
+
+List<Hit> hits(Stock s) => hitsNow()(s);
 
 /// Whether the stock traded at least `surgeTimes` its previous day's volume (liquid stocks only).
 bool surged(Stock s) => s.volumeTimes >= surgeTimes && s.dv20 >= surgeLiquidity;
@@ -157,37 +165,25 @@ int overlap(List<Hit> hits) => hits.where((h) => h.kind.rising).length;
 /// Stocks per kind for the dashboard. A stock with two or three rising signals goes under the
 /// overlap instead of under each signal; falling and zone kinds are listed as they are.
 /// Every kind appears, even when empty.
-Map<Kind, List<Stock>> group(List<Stock> stocks) {
-  final st = Settings.I;
-  final c = st.config();
-  final need = st.integer(Settings.zoneNeed);
-  final out = {for (final k in Kind.values) k: <Stock>[]};
-  for (final s in stocks) {
-    if (!st.passes(s)) continue;
-    final hs = hitsFor(s, c, need);
-    final n = overlap(hs);
-    if (n >= 2) out[n == 3 ? Kind.combo3 : Kind.combo2]!.add(s);
-    for (final h in hs) {
-      if (n < 2 || !h.kind.rising) out[h.kind]!.add(s);
-    }
-  }
-  return out;
-}
+Map<Kind, List<Stock>> group(List<Stock> stocks) => _file(stocks, moveUp: true);
 
 /// Every stock under every kind it shows, overlaps included — what notifications go by, so a
 /// 3-indicator alert still lists a stock that also had a volume surge.
-Map<Kind, List<Stock>> byKind(List<Stock> stocks) {
+Map<Kind, List<Stock>> byKind(List<Stock> stocks) => _file(stocks, moveUp: false);
+
+/// The stocks that pass the filter, under each kind they show and under their overlap;
+/// `moveUp` leaves an overlapping stock out of its rising kinds.
+Map<Kind, List<Stock>> _file(List<Stock> stocks, {required bool moveUp}) {
   final st = Settings.I;
-  final c = st.config();
-  final need = st.integer(Settings.zoneNeed);
+  final of = hitsNow();
   final out = {for (final k in Kind.values) k: <Stock>[]};
   for (final s in stocks) {
     if (!st.passes(s)) continue;
-    final hs = hitsFor(s, c, need);
+    final hs = of(s);
     final n = overlap(hs);
     if (n >= 2) out[n == 3 ? Kind.combo3 : Kind.combo2]!.add(s);
     for (final h in hs) {
-      out[h.kind]!.add(s);
+      if (!(moveUp && n >= 2 && h.kind.rising)) out[h.kind]!.add(s);
     }
   }
   return out;

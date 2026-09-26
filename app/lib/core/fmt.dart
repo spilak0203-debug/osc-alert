@@ -51,3 +51,16 @@ String axis(double v) => v.abs() >= 1000 ? grouped(v) : v.toStringAsFixed(0);
 String eok(double v) => v >= 10000 ? '${grouped(v / 10000)}조' : '${grouped(v)}억';
 
 String two(int v) => v.toString().padLeft(2, '0');
+
+/// Sorts `list` in place keeping equal items in their order (Dart's own sort does not; Java's
+/// Collections.sort, which the lists used to follow, does).
+void stableSort<T>(List<T> list, int Function(T a, T b) cmp) {
+  final indexed = [for (var i = 0; i < list.length; i++) (i, list[i])]
+    ..sort((x, y) {
+      final c = cmp(x.$2, y.$2);
+      return c != 0 ? c : x.$1.compareTo(y.$1);
+    });
+  for (var i = 0; i < list.length; i++) {
+    list[i] = indexed[i].$2;
+  }
+}

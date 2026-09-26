@@ -82,12 +82,7 @@ class Holdings {
   static List<Stock> falling(List<Stock> stocks) {
     final mine = tickers();
     if (mine.isEmpty) return [];
-    final st = Settings.I;
-    final c = st.config();
-    final need = st.integer(Settings.zoneNeed);
-    return [
-      for (final s in stocks)
-        if (mine.contains(s.ticker) && signals.hitsFor(s, c, need).any((h) => h.kind.block == signals.Block.falling)) s,
-    ];
+    final of = signals.hitsNow();
+    return [for (final s in stocks) if (mine.contains(s.ticker) && of(s).any((h) => h.falling)) s];
   }
 }

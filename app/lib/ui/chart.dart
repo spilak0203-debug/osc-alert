@@ -525,12 +525,7 @@ class _ChartPainter extends CustomPainter {
     final padX = sp(5), padY = sp(2);
     final w = tp.width + padX * 2, h = tp.height + padY * 2;
     final yy = y(v, lo, hi);
-    if (!above && !below) {
-      final p = stroke(Palette.avgPrice, 1.4);
-      for (var x = g.left; x < g.right; x += 9) {
-        c.drawLine(Offset(x, yy), Offset(math.min(x + 6, g.right), yy), p);
-      }
-    }
+    if (!above && !below) _dashed(yy, Palette.avgPrice, width: 1.4, dash: 6, gap: 3);
     // Just above the line (below it near the top), kept inside the plot.
     final boxTop = above
         ? top + 1
@@ -715,10 +710,11 @@ class _ChartPainter extends CustomPainter {
     _axisLabel(axis(low), y(low, lo, hi));
   }
 
-  void _dashed(double yy, Color color) {
-    final p = stroke(color, 1);
-    for (var x = g.left; x < g.right; x += 7) {
-      c.drawLine(Offset(x, yy), Offset(math.min(x + 4, g.right), yy), p);
+  /// A dashed line across the plot at `yy`.
+  void _dashed(double yy, Color color, {double width = 1, double dash = 4, double gap = 3}) {
+    final p = stroke(color, width);
+    for (var x = g.left; x < g.right; x += dash + gap) {
+      c.drawLine(Offset(x, yy), Offset(math.min(x + dash, g.right), yy), p);
     }
   }
 

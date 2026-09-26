@@ -256,10 +256,7 @@ class _DetailPane extends StatelessWidget {
               IconButton(
                 tooltip: '즐겨찾기',
                 icon: Icon(fav ? Icons.star : Icons.star_border, color: fav ? Palette.favorite : cs.onSurfaceVariant),
-                onPressed: () {
-                  final now = Settings.I.toggleFavorite(s.ticker);
-                  Toaster.show('${s.name}${now ? ' 즐겨찾기에 추가' : ' 즐겨찾기에서 뺌'}');
-                },
+                onPressed: () => toggleFavorite(s),
               ),
               IconButton(
                 tooltip: '종목코드 복사',

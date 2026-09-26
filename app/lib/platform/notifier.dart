@@ -125,12 +125,9 @@ class Notifier {
 
   /// Each holding with its falling signal and gain.
   static String _holdingLines(List<Stock> rows) {
-    final c = Settings.I.config();
-    final need = Settings.I.integer(Settings.zoneNeed);
+    final of = signals.hitsNow();
     return [
-      for (final s in rows)
-        '${s.name}  ${[for (final h in signals.hitsFor(s, c, need)) if (h.kind.block == signals.Block.falling) h.chip()].join('·')}'
-            '${_rate(s)}',
+      for (final s in rows) '${s.name}  ${[for (final h in of(s)) if (h.falling) h.chip()].join('·')}${_rate(s)}',
     ].join('\n');
   }
 
