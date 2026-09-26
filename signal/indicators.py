@@ -21,7 +21,8 @@ RSI_N, RSI_SIG = 14, 9
 RSI_LO, RSI_HI = 30, 70
 CCI_N, CCI_BAND = 14, 100   # 한국투자증권 HTS의 CCI와 같은 값 (2026-09 대조)
 MA_SPANS = (5, 20, 60, 120)
-MA_SPREAD = 0.015    # 전날 이평선 넷의 폭이 종가의 1.5% 안
+MA_SPREAD = 0.015    # 전날 이평선 넷의 폭이 종가의 1.5% 안 (앱 기본값, 2.47 이하 앱은 이것만)
+MA_SPREAD_MAX = 0.03  # 앱에서 고를 수 있는 가장 넓은 폭 — 스캔은 여기까지 보낸다
 MA_SLOPE = 5         # 60·120일선이 5거래일 전보다 낮지 않음
 
 
@@ -48,9 +49,9 @@ def series(frame):
                          'rsi': r, 'rsi_sig': rs, 'cci': cci(h, l, c)}, index=frame.index)
 
 
-def ma_breakout(frame):
+def ma_breakout(frame, spread_max=MA_SPREAD):
     """이평선 밀집 돌파: 전날 5·20·60·120일선이 종가의 `MA_SPREAD` 안에 모여 있다가 오늘 종가가
-    넷 모두 위로 처음 올라선 날(`cross`). `up60`·`up120`은 그 선이 `MA_SLOPE`거래일 전보다 낮지
+    넷 모두 위로 처음 올라선 날(`cross`, 폭은 `spread_max`까지). `up60`·`up120`은 그 선이 `MA_SLOPE`거래일 전보다 낮지
     않은지 — 앱이 설정대로 고른다. `hit`은 둘 다 상승인 기본 조건.
 
     `spread`는 전날 이평선 폭(종가 대비 %), `volume`은 오늘 거래량 ÷ 직전 20일 평균.
@@ -61,7 +62,7 @@ def ma_breakout(frame):
     top = ma.max(axis=1).where(ma.notna().all(axis=1))
     spread = (top - ma.min(axis=1)) / c
     up60, up120 = ma[2] >= ma[2].shift(MA_SLOPE), ma[3] >= ma[3].shift(MA_SLOPE)
-    cross = (spread.shift(1) <= MA_SPREAD) & (c > top) & (c.shift(1) <= top.shift(1))
+    cross = (spread.shift(1) <= spread_max) & (c > top) & (c.shift(1) <= top.shift(1))
     if 'Tradable' in frame:
         cross &= frame['Tradable'].astype(bool)
     vol = frame['Volume']

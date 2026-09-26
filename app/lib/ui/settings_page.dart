@@ -66,7 +66,7 @@ class _SettingsPageState extends State<SettingsPage> {
     final alerts = <Widget>[
       sub('받을 신호'),
       _toggle(Settings.alertCombo, '강도 높음 이상', '거래량 급증(전일 3배)·골든 교차${pairs ? '(2지표 이상)' : '(3지표)'}·이평선 밀집 돌파 중 2개면 높음, 3개면 매우 높음'),
-      _toggle(Settings.alertMa, '이평선 밀집 돌파', '5·20·60·120일선이 1.5% 안에 모였다가 종가가 넷 다 위로 올라선 날'
+      _toggle(Settings.alertMa, '이평선 밀집 돌파', '5·20·60·120일선이 ${st.maSpread}% 안에 모였다가 종가가 넷 다 위로 올라선 날'
           '${st.maRising == 'none' ? '' : ' (${Settings.maRisingLabels[st.maRising]} 상승 중)'}'),
       _toggle(Settings.alert3, '3지표 일치', '스토캐스틱·RSI·CCI가 모두 골든(또는 데드)크로스'),
       if (pairs) _toggle(Settings.alert2, '2지표 일치', '셋 중 둘만 일치해도 따로 알림'),
@@ -130,6 +130,9 @@ class _SettingsPageState extends State<SettingsPage> {
       _toggle(Settings.cciBand, '밴드 조건 사용', '켜면 ±기준선 돌파, 끄면 0선 돌파'),
       _numbers(Settings.cciLevel, '기준선 (±)', null, null),
       sub('이평선 밀집 돌파'),
+      label('밀집 폭 · 전날 5·20·60·120일선의 최고와 최저 차이가 종가의 몇 % 안일 때'),
+      _choice(st.maSpread, [for (final v in Settings.maSpreads) [v, '$v%']],
+          (v) => st.setNumber(Settings.maSpreadKey, double.parse(v))),
       label('장기선 상승 조건 · 고른 선이 5거래일 전보다 낮지 않을 때만 신호'),
       _choice(st.maRising, const [['both', '둘 다'], ['60', '60일선만'], ['120', '120일선만'], ['none', '안 봄']], (v) {
         st.setFlag(Settings.maUp60, v == 'both' || v == '60');
@@ -189,7 +192,7 @@ class _SettingsPageState extends State<SettingsPage> {
     final summaries = {
       _Group.rules: '${pairs ? '2지표도 신호' : '3지표만 신호'} · 허용 기간 ${window == 0 ? '당일' : '$window일'} · '
           '스토캐스틱 ${st.flag(Settings.stochSlow) ? 'Slow' : 'Fast'} · 밴드 조건 스토캐스틱 ${onOff(Settings.stochBand)}·'
-          'RSI ${onOff(Settings.rsiBand)}·CCI ${onOff(Settings.cciBand)} · 이평선 돌파 장기선 ${Settings.maRisingLabels[st.maRising]}',
+          'RSI ${onOff(Settings.rsiBand)}·CCI ${onOff(Settings.cciBand)} · 이평선 돌파 폭 ${st.maSpread}%·장기선 ${Settings.maRisingLabels[st.maRising]}',
       _Group.alerts: alertNames.isEmpty ? '받을 알림 없음' : '받음: ${alertNames.join(' · ')}',
       _Group.filter: '${st.market == 'all' ? '전체 시장' : st.market} · 거래대금 ${amount(Settings.filterDv, '제한 없음')} · '
           '시총 ${amount(Settings.filterCap, '제한 없음')}',

@@ -28,6 +28,9 @@ void main() {
     await tester.pumpAndSettle();
     expect(Settings.I.maRising, '60');
     expect(Settings.I.config().maUp120, isFalse);
+    await tester.tap(find.text('2%'));
+    await tester.pumpAndSettle();
+    expect(Settings.I.config().maSpread, 2);
 
     await tester.tap(find.text('알림'));
     await tester.pumpAndSettle();

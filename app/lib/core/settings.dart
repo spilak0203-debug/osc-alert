@@ -30,6 +30,9 @@ class Settings extends ChangeNotifier {
   static const pairSignals = 'pairSignals';
   // Moving-average breakout: the 60- / 120-day average must be rising
   static const maUp60 = 'maUp60', maUp120 = 'maUp120';
+  // Moving-average breakout: how close the four averages must be, % of the close
+  static const maSpreadKey = 'maSpread';
+  static const maSpreads = ['1', '1.5', '2', '3'];
   // Summary: the oversold/overbought groups are unfolded
   static const showZones = 'showZones';
   static const preMarket = 'preMarket', quietDays = 'quietDays';
@@ -96,6 +99,8 @@ class Settings extends ChangeNotifier {
         return 70;
       case cciLevel:
         return 100;
+      case maSpreadKey:
+        return 1.5;
       default:
         return 0;
     }
@@ -156,6 +161,12 @@ class Settings extends ChangeNotifier {
 
   static const maRisingLabels = {'both': '60·120일선 둘 다', '60': '60일선만', '120': '120일선만', 'none': '안 봄'};
 
+  /// The breakout's spread as the settings write it: "1", "1.5", "2" or "3".
+  String get maSpread {
+    final v = number(maSpreadKey);
+    return v == v.roundToDouble() ? v.toStringAsFixed(0) : '$v';
+  }
+
   /// Whether a stock passes the user's filter.
   bool passes(Stock s) {
     final m = market;
@@ -190,6 +201,7 @@ class Settings extends ChangeNotifier {
     r.pairs = flag(pairSignals);
     r.maUp60 = flag(maUp60);
     r.maUp120 = flag(maUp120);
+    r.maSpread = number(maSpreadKey);
     return r;
   }
 

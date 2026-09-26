@@ -45,7 +45,8 @@ class _Marks {
     deadCross = List.generate(n, (_) => List.filled(3, false));
     final plain = cfg.plain();
     final s = bars.series;
-    maBreak = ind.maBreakouts(s.ma, bars.close, bars.volume, up60: cfg.maUp60, up120: cfg.maUp120);
+    maBreak = ind.maBreakouts(s.ma, bars.close, bars.volume,
+        up60: cfg.maUp60, up120: cfg.maUp120, spread: cfg.maSpread / 100);
     for (var i = 1; i < n; i++) {
       goldPart[i] = rule.golden(s.snap(i - 1), s.snap(i), cfg);
       deadPart[i] = rule.dead(s.snap(i - 1), s.snap(i), cfg);
@@ -90,7 +91,7 @@ final Expando<Map<String, _Marks>> _marksCache = Expando();
 
 _Marks _marksFor(Bars bars, rule.RuleConfig cfg) {
   final key = '${cfg.slow}${cfg.stochBand}${cfg.rsiBand}${cfg.cciBand}${cfg.stochLo}${cfg.stochHi}'
-      '${cfg.rsiLo}${cfg.rsiHi}${cfg.cciLevel}${cfg.window}${cfg.pairs}${cfg.maUp60}${cfg.maUp120}';
+      '${cfg.rsiLo}${cfg.rsiHi}${cfg.cciLevel}${cfg.window}${cfg.pairs}${cfg.maUp60}${cfg.maUp120}${cfg.maSpread}';
   final map = _marksCache[bars] ??= {};
   return map[key] ??= _Marks(bars, cfg);
 }

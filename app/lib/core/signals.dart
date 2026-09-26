@@ -121,7 +121,9 @@ List<Hit> hitsFor(Stock s, RuleConfig c, int zoneNeed) {
     }
   }
   final mb = s.maBreak;
-  if (mb != null && (!c.maUp60 || mb.up60) && (!c.maUp120 || mb.up120)) out.add(Hit(Kind.maBreak, null));
+  if (mb != null && mb.spread <= c.maSpread && (!c.maUp60 || mb.up60) && (!c.maUp120 || mb.up120)) {
+    out.add(Hit(Kind.maBreak, null));
+  }
   if (m == null) return out;
   final d = count(m[1]);
   if (d == 3) {

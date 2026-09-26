@@ -211,16 +211,16 @@ def market_row(ticker, info, f, day):
     traded = f.Volume[f.Volume > 0]
     if at >= 0 and f.Volume.iloc[at] > 0 and traded.index.get_loc(day) >= 1:
         row['vr'] = num(f.Volume.iloc[at] / traded.iloc[traded.index.get_loc(day) - 1], 2)
-    mb = ind.ma_breakout(f)
+    mb = ind.ma_breakout(f, ind.MA_SPREAD_MAX)
     # 이평선 밀집 돌파. 스팩은 공모가 근처에 붙어 있어 늘 밀집이고, 거래가 적은 종목은 신호가
     # 흔들리므로 백테스트와 같이 거래대금 5억 이상만.
-    #   mb:  [전날 이평선 폭 %, 거래량 배수, 60일선 상승 0/1, 120일선 상승 0/1] — 앱 2.48부터, 장기선
-    #        조건은 앱 설정대로 고른다
-    #   mab: [폭, 거래량 배수] — 60·120일선이 둘 다 상승일 때만 (2.47 이하 앱이 읽는 형식)
+    #   mb:  [전날 이평선 폭 %, 거래량 배수, 60일선 상승 0/1, 120일선 상승 0/1] — 앱 2.48부터. 폭은
+    #        MA_SPREAD_MAX(3%)까지 보내고, 밀집 폭과 장기선 조건은 앱 설정대로 고른다
+    #   mab: [폭, 거래량 배수] — 폭 1.5% 안이고 60·120일선이 둘 다 상승일 때만 (2.47 이하 앱이 읽는 형식)
     if (at >= 0 and mb.cross.iloc[at] and dv20.iloc[at] >= LIQUIDITY and '스팩' not in info['name']):
         e = mb.iloc[at]
         row['mb'] = [num(e.spread, 2), num(e.volume, 2), int(bool(e.up60)), int(bool(e.up120))]
-        if e.hit:
+        if e.hit and e.spread <= ind.MA_SPREAD * 100:
             row['mab'] = [num(e.spread, 2), num(e.volume, 2)]
     if at >= 1:
         lo = max(0, at - rl.HISTORY + 1)
@@ -308,7 +308,7 @@ def main():
     print(f"골든 일치 {len(payload['golden'])}건 (거래대금 5억↑ {len(liquid)}건) · "
           f"데드 일치 {len(payload['dead'])}건")
     mb = [r for r in market['stocks'] if 'mb' in r]
-    print(f"이평선 밀집 돌파 {len(mb)}건 (60·120 둘 다 상승 {sum('mab' in r for r in mb)}건): "
+    print(f"이평선 3% 안 돌파 {len(mb)}건 (1.5% 안·60·120 둘 다 상승 {sum('mab' in r for r in mb)}건): "
           + ', '.join(f"{r['n']}{'' if 'mab' in r else '(장기선 ' + ''.join('↑' if u else '↓' for u in r['mb'][2:]) + ')'}"
                       for r in mb[:20]))
     for label, key in (('골든', 'golden'), ('데드', 'dead')):

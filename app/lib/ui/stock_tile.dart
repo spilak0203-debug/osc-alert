@@ -392,9 +392,9 @@ class _StockDetailState extends State<StockDetail> {
     ];
     children.add(Padding(
       padding: const EdgeInsets.only(top: 4),
-      child: Text.rich(TextSpan(style: t.bodySmall, children: const [
-        TextSpan(text: '┊', style: TextStyle(color: Palette.maBreak, fontWeight: FontWeight.w700)),
-        TextSpan(text: '  보라 점선 · 이평선 밀집 돌파 (5·20·60·120일선이 1.5% 안에 모였다가 종가가 넷 다 위로)'),
+      child: Text.rich(TextSpan(style: t.bodySmall, children: [
+        const TextSpan(text: '┊', style: TextStyle(color: Palette.maBreak, fontWeight: FontWeight.w700)),
+        TextSpan(text: '  보라 점선 · 이평선 밀집 돌파 (5·20·60·120일선이 ${Settings.I.maSpread}% 안에 모였다가 종가가 넷 다 위로)'),
       ])),
     ));
     for (final line in lines) {

@@ -16,8 +16,8 @@ Map<String, dynamic> row([List<num>? mab]) => {
 
 void main() {
   test('mab becomes a breakout hit with the volume', () {
-    final s = Stock.parse(row([1.87, 1.78]));
-    expect(s.maBreak, (spread: 1.87, volume: 1.78, up60: true, up120: true));
+    final s = Stock.parse(row([1.2, 1.78]));
+    expect(s.maBreak, (spread: 1.2, volume: 1.78, up60: true, up120: true));
     final hits = hitsFor(s, RuleConfig(), 1);
     expect(hits.map((h) => h.kind), [Kind.maBreak]);
     expect(hits.single.describe(), '이평선 밀집 돌파');
@@ -80,6 +80,18 @@ void main() {
     final volume = List.filled(close.length, 1e7);
     expect(maBreakouts(ma, close, volume).last, isFalse);
     expect(maBreakouts(ma, close, volume, up60: false, up120: false).last, isTrue);
+  });
+
+  test('the spread comes from the settings', () {
+    final s = Stock.parse({...row(), 'mb': [2.4, 1.0, 1, 1]});
+    expect(hitsFor(s, RuleConfig(), 1), isEmpty); // default 1.5%
+    expect(hitsFor(s, RuleConfig()..maSpread = 3, 1).map((h) => h.kind), [Kind.maBreak]);
+    // The chart: a 2.9% gap between the averages the day before.
+    final close = [...List.filled(125, 100.0), 104.0, 104.0, 104.0, 104.0, 104.0, 99.0, 108.0];
+    final ma = [for (final n in maPeriods) sma(close, n)];
+    final volume = List.filled(close.length, 1e7);
+    expect(maBreakouts(ma, close, volume, up60: false, up120: false).last, isFalse);
+    expect(maBreakouts(ma, close, volume, up60: false, up120: false, spread: 0.03).last, isTrue);
   });
 
   test('no mab, no breakout', () {

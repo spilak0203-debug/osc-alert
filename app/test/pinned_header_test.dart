@@ -77,7 +77,8 @@ void main() {
     expect(find.text('종목001'), findsOneWidget);
     expect(find.text('강도 높음 (신호 2개)'), findsWidgets);
     expect(find.text('높음'), findsOneWidget); // the row's chip
-    expect(find.text('높음 이상 칸에 1'), findsNWidgets(2));
+    // Both tiles count it although it is listed under the overlap.
+    expect(find.text('1'), findsNWidgets(3)); // 2-signal, breakout and surge tiles
     expect(find.text('이평선 밀집 돌파'), findsOneWidget); // the tile only: no section of its own
   });
 }

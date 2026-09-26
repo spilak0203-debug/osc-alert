@@ -25,6 +25,9 @@ class RuleConfig {
   /// Moving-average breakout: require the 60- / 120-day average to be rising.
   bool maUp60 = true, maUp120 = true;
 
+  /// Moving-average breakout: the four averages within this many % of the close the day before.
+  double maSpread = 1.5;
+
   /// Fewest indicators that make a golden or dead signal.
   int get need => pairs ? 2 : 3;
 
@@ -41,7 +44,8 @@ class RuleConfig {
     ..window = window
     ..pairs = pairs
     ..maUp60 = maUp60
-    ..maUp120 = maUp120;
+    ..maUp120 = maUp120
+    ..maSpread = maSpread;
 
   /// The same rule without the stochastic and RSI band conditions: every crossing of the lines.
   RuleConfig plain() => copy()
