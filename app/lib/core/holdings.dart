@@ -4,33 +4,41 @@ import 'settings.dart';
 import 'signals.dart' as signals;
 import 'stock.dart';
 
-/// One stock the user owns: how many shares at what average price. The name is kept so a stock
-/// that drops out of market.json still shows.
+/// One stock the user owns, optionally with how many shares at what average price (NaN when
+/// not given: no average-price line, no value). The name is kept so a stock that drops out of
+/// market.json still shows.
 class Holding {
-  Holding(this.ticker, this.name, this.avg, this.qty);
+  Holding(this.ticker, this.name, [this.avg = double.nan, this.qty = double.nan]);
 
   final String ticker, name;
 
-  /// Average buy price (won) and shares.
+  /// Average buy price (won) and shares; NaN when left blank.
   final double avg, qty;
+
+  bool get hasAvg => avg > 0;
+
+  bool get hasQty => qty > 0;
+
+  /// Both given: value and gain in won can be worked out.
+  bool get complete => hasAvg && hasQty;
 
   double get cost => avg * qty;
 
-  /// Value at `price` and the gain over the cost (NaN when there is no price).
+  /// Value at `price` and the gain over the cost (NaN when either is missing).
   double value(double price) => price * qty;
 
   double gain(double price) => value(price) - cost;
 
-  /// Gain as % of the cost.
-  double rate(double price) => cost > 0 ? gain(price) / cost * 100 : double.nan;
+  /// The price's gain over the average, % (needs only the average).
+  double rate(double price) => hasAvg ? (price / avg - 1) * 100 : double.nan;
 
-  Map<String, Object> toJson() => {'t': ticker, 'n': name, 'a': avg, 'q': qty};
+  Map<String, Object> toJson() => {'t': ticker, 'n': name, if (hasAvg) 'a': avg, if (hasQty) 'q': qty};
 
   static Holding? fromJson(Object? o) {
     if (o is! Map) return null;
     final t = o['t'], a = o['a'], q = o['q'];
-    if (t is! String || a is! num || q is! num) return null;
-    return Holding(t, '${o['n'] ?? t}', a.toDouble(), q.toDouble());
+    if (t is! String) return null;
+    return Holding(t, '${o['n'] ?? t}', a is num ? a.toDouble() : double.nan, q is num ? q.toDouble() : double.nan);
   }
 }
 

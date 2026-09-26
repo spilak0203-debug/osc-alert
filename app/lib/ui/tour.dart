@@ -127,13 +127,18 @@ class Tour {
       await shot('3b-ma-breakout');
     }
 
-    // The holdings tab with two sample holdings (the user's own are put back afterwards).
+    // The holdings tab with sample holdings: one with an average and shares, one with an average
+    // only, one with neither (the user's own are put back afterwards).
     final kept = Settings.I.prefs.getString(Holdings.key);
-    final sample = Repo.I.stocks.where((s) => s.ticker == '005930' || s.ticker == '000660').toList();
-    for (final s in sample) {
-      await Holdings.put(Holding(s.ticker, s.name, (s.price() * 0.9).roundToDouble(), 10));
+    final sample = Repo.I.stocks.where((s) => const {'005930', '000660', '035420'}.contains(s.ticker)).toList();
+    for (var i = 0; i < sample.length; i++) {
+      final s = sample[i];
+      final avg = i < 2 ? (s.price() * 0.9).roundToDouble() : double.nan;
+      await Holdings.put(Holding(s.ticker, s.name, avg, i == 0 ? 10 : double.nan));
     }
     home.show(HomeState.holdingsTab);
+    if (wide && sample.isNotEmpty) home.select(sample.first);
+    await _pause(wide ? 6000 : 0);
     await shot('4c-holdings');
     await (kept == null ? Settings.I.prefs.remove(Holdings.key) : Settings.I.setString(Holdings.key, kept));
     Repo.I.changed();

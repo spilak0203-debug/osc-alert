@@ -237,7 +237,6 @@ class _StockDetailState extends State<StockDetail> {
         ]));
     }
     if (s.seq != null) info..add(gap)..add(_indicatorTable(context, s, cfg));
-    info..add(gap)..add(_legend(context, cfg));
     if (error != null) {
       info.add(Text('차트를 불러오지 못했습니다: $error', style: Theme.of(context).textTheme.bodySmall));
     }
@@ -249,7 +248,13 @@ class _StockDetailState extends State<StockDetail> {
       [Settings.showCci, 'CCI'],
     ];
     final panels = <Widget>[
-      ChartPanel(type: ChartType.candle, bars: bars, cfg: cfg, group: group, showMa: st.flag(Settings.showMa)),
+      ChartPanel(
+          type: ChartType.candle,
+          bars: bars,
+          cfg: cfg,
+          group: group,
+          showMa: st.flag(Settings.showMa),
+          avgPrice: Holdings.of(s.ticker)?.avg ?? double.nan),
       if (st.flag(Settings.showVolume)) ChartPanel(type: ChartType.volume, bars: bars, cfg: cfg, group: group),
       if (st.flag(Settings.showStoch)) ChartPanel(type: ChartType.stoch, bars: bars, cfg: cfg, group: group),
       if (st.flag(Settings.showRsi)) ChartPanel(type: ChartType.rsi, bars: bars, cfg: cfg, group: group),
@@ -273,6 +278,17 @@ class _StockDetailState extends State<StockDetail> {
         ]),
       ),
       ...panels,
+      // How to move the charts right under them; what their marks mean below that.
+      Padding(
+        padding: const EdgeInsets.fromLTRB(16, 6, 16, 0),
+        child: Text(
+          widget.wide
+              ? 'Ctrl+휠로 확대 · 끌어서 이동 · 마우스를 올려 값 보기 · 더블클릭하면 처음으로'
+              : '두 손가락으로 확대 · 옆으로 밀어 이동 · 탭하거나 길게 눌러 값 보기 · 두 번 탭하면 처음으로',
+          style: Theme.of(context).textTheme.bodySmall!.copyWith(color: Theme.of(context).colorScheme.onSurfaceVariant),
+        ),
+      ),
+      Padding(padding: const EdgeInsets.fromLTRB(16, 10, 16, 0), child: _legend(context, cfg)),
       Padding(
         padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
         child: Row(children: [
@@ -421,6 +437,15 @@ class _StockDetailState extends State<StockDetail> {
         TextSpan(text: '  보라 점선 · 이평선 밀집 돌파 (5·20·60·120일선이 ${Settings.I.maSpread}% 안에 모였다가 종가가 넷 다 위로)'),
       ])),
     ));
+    if (Holdings.of(widget.stock.ticker) != null) {
+      children.add(Padding(
+        padding: const EdgeInsets.only(top: 4),
+        child: Text.rich(TextSpan(style: t.bodySmall, children: const [
+          TextSpan(text: '╌', style: TextStyle(color: Palette.avgPrice, fontWeight: FontWeight.w700)),
+          TextSpan(text: '  청록 점선 · 내 평단 (왼쪽 숫자는 종가 기준 수익률, 화면 밖이면 위·아래 끝에 화살표)'),
+        ])),
+      ));
+    }
     for (final line in lines) {
       if (!cfg.pairs && line[0] == '△▽') continue;
       final mark = line[0];
@@ -433,15 +458,6 @@ class _StockDetailState extends State<StockDetail> {
         ])),
       ));
     }
-    children.add(Padding(
-      padding: const EdgeInsets.only(top: 8),
-      child: Text(
-        widget.wide
-            ? 'Ctrl+휠로 확대 · 끌어서 이동 · 마우스를 올려 값 보기 · 더블클릭하면 처음으로'
-            : '두 손가락으로 확대 · 옆으로 밀어 이동 · 탭하거나 길게 눌러 값 보기 · 두 번 탭하면 처음으로',
-        style: t.bodySmall!.copyWith(color: muted),
-      ),
-    ));
     return _panel(context, children);
   }
 

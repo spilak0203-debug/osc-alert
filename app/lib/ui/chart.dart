@@ -111,6 +111,7 @@ class ChartPanel extends StatefulWidget {
     this.showMa = true,
     this.showSignals = true,
     this.compact = false,
+    this.avgPrice = double.nan,
   });
 
   final ChartType type;
@@ -118,6 +119,9 @@ class ChartPanel extends StatefulWidget {
   final rule.RuleConfig cfg;
   final ChartGroup group;
   final bool showMa, showSignals, compact;
+
+  /// Candles: the user's average buy price for this stock (NaN when not held).
+  final double avgPrice;
 
   @override
   State<ChartPanel> createState() => _ChartPanelState();
@@ -241,6 +245,7 @@ class _ChartPanelState extends State<ChartPanel> {
             group: widget.group,
             showMa: widget.showMa,
             showSignals: widget.showSignals,
+            avgPrice: widget.avgPrice,
             gutter: _gutter,
             scaler: scaler,
             colors: colors,
@@ -356,6 +361,7 @@ class _ChartPainter extends CustomPainter {
     required this.group,
     required this.showMa,
     required this.showSignals,
+    required this.avgPrice,
     required this.gutter,
     required this.scaler,
     required this.colors,
@@ -367,6 +373,7 @@ class _ChartPainter extends CustomPainter {
   final rule.RuleConfig cfg;
   final ChartGroup group;
   final bool showMa, showSignals;
+  final double avgPrice;
   final double gutter;
   final TextScaler scaler;
   final _Colors colors;
@@ -484,6 +491,7 @@ class _ChartPainter extends CustomPainter {
       }
     }
     if (showSignals) _markers(b, lo, hi);
+    _avgLine(b, lo, hi);
 
     // Header: selected day, then moving-average legend.
     final i = at;
@@ -502,6 +510,36 @@ class _ChartPainter extends CustomPainter {
     text(_label(b, a), g.left, base, colors.muted);
     final last = _label(b, n - 1);
     text(last, g.right - measure(last), base, colors.muted);
+  }
+
+  /// The average buy price of a holding: a line across the candles with a pill on the left (older candles, out of the way)
+  /// ("평단 12,345 +8.1%", against the last close). When the price is off the visible range,
+  /// only the pill, at that edge, with an arrow.
+  void _avgLine(Bars b, double lo, double hi) {
+    final v = avgPrice;
+    if (v.isNaN || v <= 0) return;
+    final gain = (b.close[b.size - 1] / v - 1) * 100;
+    final above = v > hi, below = v < lo;
+    final label = '${above ? '↑ ' : below ? '↓ ' : ''}평단 ${grouped(v)} ${gain >= 0 ? '+' : ''}${gain.toStringAsFixed(1)}%';
+    final tp = _tp(label, Colors.white, bold: true);
+    final padX = sp(5), padY = sp(2);
+    final w = tp.width + padX * 2, h = tp.height + padY * 2;
+    final yy = y(v, lo, hi);
+    if (!above && !below) {
+      final p = stroke(Palette.avgPrice, 1.4);
+      for (var x = g.left; x < g.right; x += 9) {
+        c.drawLine(Offset(x, yy), Offset(math.min(x + 6, g.right), yy), p);
+      }
+    }
+    // Just above the line (below it near the top), kept inside the plot.
+    final boxTop = above
+        ? top + 1
+        : below
+            ? bottom - h - 1
+            : (yy - h - 2 < top ? yy + 2 : yy - h - 2);
+    final rect = RRect.fromRectAndRadius(Rect.fromLTWH(g.left + 2, boxTop, w, h), Radius.circular(sp(4)));
+    c.drawRRect(rect, fill(Palette.avgPrice));
+    tp.paint(c, Offset(rect.left + padX, rect.top + padY));
   }
 
   String _label(Bars b, int i) {

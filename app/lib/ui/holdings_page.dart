@@ -35,9 +35,16 @@ class _HoldingsPageState extends State<HoldingsPage> {
       builder: (context, _) {
         final byTicker = {for (final s in Repo.I.stocks) s.ticker: s};
         final rows = [for (final h in Holdings.all()) (h, byTicker[h.ticker])];
-        // Biggest position first.
-        double value((Holding, Stock?) r) => r.$2 == null ? r.$1.cost : r.$1.value(r.$2!.price());
-        rows.sort((a, b) => value(b).compareTo(value(a)));
+        // Biggest position first; holdings without shares after them, by market cap.
+        double value((Holding, Stock?) r) {
+          final v = r.$1.complete ? (r.$2 == null ? r.$1.cost : r.$1.value(r.$2!.price())) : double.nan;
+          return v.isNaN ? -1 : v;
+        }
+        rows.sort((a, b) {
+          final c = value(b).compareTo(value(a));
+          return c != 0 ? c : (b.$2?.cap ?? 0).compareTo(a.$2?.cap ?? 0);
+        });
+        final priced = rows.where((r) => r.$1.complete).toList();
         final add = FloatingActionButton.extended(
           heroTag: 'holdings-add',
           onPressed: () => addHolding(context),
@@ -47,7 +54,7 @@ class _HoldingsPageState extends State<HoldingsPage> {
         if (rows.isEmpty) return Stack(children: [_empty(context), Positioned(right: 16, bottom: 16, child: add)]);
         return Stack(children: [
           ListView(padding: const EdgeInsets.only(bottom: 96), children: [
-            _total(context, rows),
+            if (priced.isNotEmpty) _total(context, priced, rows.length),
             for (final r in rows) _row(context, r.$1, r.$2),
           ]),
           Positioned(right: 16, bottom: 16, child: add),
@@ -67,16 +74,17 @@ class _HoldingsPageState extends State<HoldingsPage> {
           const SizedBox(height: 12),
           Text('보유종목이 없습니다', style: t.titleMedium),
           const SizedBox(height: 6),
-          Text('아래 [종목 추가]로 매수가와 수량을 넣으면 수익률과 오늘 신호를 여기서 봅니다.\n'
-              '보유종목에 데드크로스가 뜨면 따로 알려 드립니다.',
+          Text('아래 [종목 추가]로 종목을 넣으면 오늘 신호를 여기서 모아 보고, 데드크로스가 뜨면 따로 알려 드립니다.\n'
+              '평균 매수가와 수량도 넣으면 수익률과 차트의 평단선까지 (둘 다 선택).',
               textAlign: TextAlign.center, style: t.bodyMedium!.copyWith(color: muted)),
         ]),
       ),
     );
   }
 
-  /// Value, gain and cost of everything, and today's move in won.
-  Widget _total(BuildContext context, List<(Holding, Stock?)> rows) {
+  /// Value, gain and cost of the holdings with shares and an average price, and today's move in
+  /// won; `all` counts every holding.
+  Widget _total(BuildContext context, List<(Holding, Stock?)> rows, int all) {
     final t = Theme.of(context).textTheme;
     final muted = Theme.of(context).colorScheme.onSurfaceVariant;
     final p = Palette.of(context);
@@ -107,11 +115,13 @@ class _HoldingsPageState extends State<HoldingsPage> {
           Text('평가금액', style: t.bodySmall!.copyWith(color: muted)),
           Text('${grouped(value)}원', style: t.headlineSmall!.copyWith(fontWeight: FontWeight.w700)),
           Text('${won(gain)} (${percent(rate)})', style: t.titleMedium!.copyWith(color: p.change(gain))),
+          if (rows.length < all)
+            Text('평단·수량을 넣은 ${rows.length}종목 기준', style: t.bodySmall!.copyWith(color: muted)),
           const SizedBox(height: 12),
           Row(children: [
             cell('매입금액', '${grouped(cost)}원'),
             cell('오늘', won(today), p.change(today)),
-            cell('종목 수', '${rows.length}종목'),
+            cell('종목 수', '$all종목'),
           ]),
         ]),
       ),
@@ -124,6 +134,7 @@ class _HoldingsPageState extends State<HoldingsPage> {
     final p = Palette.of(context);
     final price = s?.price() ?? double.nan;
     final gain = h.gain(price), rate = h.rate(price);
+    final change = s?.changePct() ?? double.nan;
     final hits = s == null ? const <signals.Hit>[] : signals.hits(s);
     final zones = [for (final x in hits) if (x.kind.zone) x.kind.label];
     final open = !widget.wide && _expanded == h.ticker;
@@ -147,7 +158,9 @@ class _HoldingsPageState extends State<HoldingsPage> {
               Text(h.name, maxLines: 1, overflow: TextOverflow.ellipsis, style: t.titleMedium),
               Text(
                   [
-                    '${grouped(h.qty)}주 · 평단 ${grouped(h.avg)}원',
+                    if (h.hasQty) '${grouped(h.qty)}주',
+                    if (h.hasAvg) '평단 ${grouped(h.avg)}원',
+                    if (!h.hasQty && !h.hasAvg) '${h.ticker} · ${s?.market ?? ''}',
                     if (s == null) '시세 없음',
                     ...zones,
                   ].join(' · '),
@@ -156,11 +169,20 @@ class _HoldingsPageState extends State<HoldingsPage> {
             ]),
           ),
           Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
-            Text(price.isNaN ? '-' : '${grouped(h.value(price))}원', style: t.titleMedium),
-            Text(price.isNaN ? '-' : '${won(gain)} (${percent(rate)})',
-                style: t.bodyMedium!.copyWith(color: p.change(gain))),
-            Text('현재가 ${price.isNaN ? '-' : grouped(price)} (${percent(s?.changePct() ?? double.nan)})',
-                style: t.bodySmall!.copyWith(color: cs.onSurfaceVariant)),
+            // With shares and an average: value, gain and the price below. Otherwise the price
+            // and its change, with the gain over the average when there is one.
+            if (h.complete) ...[
+              Text(price.isNaN ? '-' : '${grouped(h.value(price))}원', style: t.titleMedium),
+              Text(price.isNaN ? '-' : '${won(gain)} (${percent(rate)})',
+                  style: t.bodyMedium!.copyWith(color: p.change(gain))),
+              Text('현재가 ${price.isNaN ? '-' : grouped(price)} (${percent(change)})',
+                  style: t.bodySmall!.copyWith(color: cs.onSurfaceVariant)),
+            ] else ...[
+              Text(price.isNaN ? '-' : '${grouped(price)}원', style: t.titleMedium),
+              Text(percent(change), style: t.bodyMedium!.copyWith(color: p.change(change))),
+              if (h.hasAvg)
+                Text('평단 대비 ${percent(rate)}', style: t.bodySmall!.copyWith(color: p.change(rate))),
+            ],
           ]),
           IconButton(
             tooltip: '수량·평단 수정',
@@ -185,15 +207,15 @@ class _HoldingsPageState extends State<HoldingsPage> {
 /// "+12,345원" / "-1,000원".
 String won(double v) => v.isNaN ? '-' : '${signed(v, 0)}원';
 
-/// Picks a stock by name or code, then asks for the shares and average price.
+/// Picks a stock by name or code, then asks for the shares and average price (both optional).
 Future<void> addHolding(BuildContext context) async {
   final s = await showDialog<Stock>(context: context, builder: (_) => const _PickStock());
   if (s == null || !context.mounted) return;
   await editHolding(context, s.ticker, s.name, s.price());
 }
 
-/// Shares and average price for one stock (`price` fills in a new one's average); saving an
-/// existing holding replaces it, and it can be removed here.
+/// Shares and average price for one stock, both optional (`price` is the hint for the average);
+/// saving an existing holding replaces it, and it can be removed here.
 Future<void> editHolding(BuildContext context, String ticker, String name, double price) =>
     showDialog(context: context, builder: (_) => _EditHolding(ticker: ticker, name: name, price: price));
 
@@ -269,15 +291,17 @@ class _EditHolding extends StatefulWidget {
 
 class _EditHoldingState extends State<_EditHolding> {
   late final Holding? _old = Holdings.of(widget.ticker);
-  late final _avg = TextEditingController(
-      text: _old != null ? _plain(_old.avg) : (widget.price.isNaN ? '' : _plain(widget.price)));
-  late final _qty = TextEditingController(text: _old != null ? _plain(_old.qty) : '');
+  late final _avg = TextEditingController(text: _old?.hasAvg ?? false ? _plain(_old!.avg) : '');
+  late final _qty = TextEditingController(text: _old?.hasQty ?? false ? _plain(_old!.qty) : '');
   String? _error;
 
   static String _plain(double v) => v == v.roundToDouble() ? v.toStringAsFixed(0) : '$v';
 
+  /// Blank is NaN (not given); anything else must be a number above 0, or null.
   static double? _number(String text) {
-    final v = double.tryParse(text.replaceAll(',', '').trim());
+    final t = text.replaceAll(',', '').trim();
+    if (t.isEmpty) return double.nan;
+    final v = double.tryParse(t);
     return v != null && v > 0 ? v : null;
   }
 
@@ -291,7 +315,7 @@ class _EditHoldingState extends State<_EditHolding> {
   Future<void> _save() async {
     final avg = _number(_avg.text), qty = _number(_qty.text);
     if (avg == null || qty == null) {
-      setState(() => _error = '평균 매수가와 수량을 0보다 큰 숫자로 넣어 주세요');
+      setState(() => _error = '비워 두거나 0보다 큰 숫자로 넣어 주세요');
       return;
     }
     await Holdings.put(Holding(widget.ticker, widget.name, avg, qty));
@@ -320,14 +344,19 @@ class _EditHoldingState extends State<_EditHolding> {
             autofocus: _old == null,
             keyboardType: const TextInputType.numberWithOptions(decimal: true),
             inputFormatters: digits,
-            decoration: const InputDecoration(labelText: '평균 매수가', suffixText: '원'),
+            decoration: InputDecoration(
+              labelText: '평균 매수가 (선택)',
+              suffixText: '원',
+              hintText: widget.price.isNaN ? null : '현재가 ${grouped(widget.price)}',
+              helperText: '넣으면 차트에 평단선과 수익률',
+            ),
           ),
           const SizedBox(height: 8),
           TextField(
             controller: _qty,
             keyboardType: const TextInputType.numberWithOptions(decimal: true),
             inputFormatters: digits,
-            decoration: InputDecoration(labelText: '수량', suffixText: '주', errorText: _error),
+            decoration: InputDecoration(labelText: '수량 (선택)', suffixText: '주', errorText: _error),
             onSubmitted: (_) => _save(),
           ),
         ]),

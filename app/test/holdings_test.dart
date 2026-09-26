@@ -77,7 +77,7 @@ void main() {
 
     await tester.tap(find.byTooltip('수량·평단 수정').last);
     await tester.pumpAndSettle();
-    await tester.enterText(find.widgetWithText(TextField, '수량'), '1,000');
+    await tester.enterText(find.widgetWithText(TextField, '수량 (선택)'), '1,000');
     await tester.tap(find.text('저장'));
     await tester.pumpAndSettle();
     expect(Holdings.of('000002')!.qty, 1000);
@@ -95,13 +95,31 @@ void main() {
     await tester.pumpAndSettle();
     await tester.tap(find.text('다라화학'));
     await tester.pumpAndSettle();
-    expect(find.widgetWithText(TextField, '평균 매수가'), findsOneWidget);
-    await tester.enterText(find.widgetWithText(TextField, '수량'), '3');
+    // Both fields may stay blank: the stock is held, with no value and no average line.
     await tester.tap(find.text('저장'));
     await tester.pumpAndSettle();
     final h = Holdings.of('000002')!;
-    expect((h.avg, h.qty), (9000, 3)); // the average starts at the current price
-    expect(find.text('27,000원'), findsNWidgets(3)); // value, cost and the row
+    expect(h.hasAvg || h.hasQty, isFalse);
+    expect(find.text('평가금액'), findsNothing); // no total without amounts
+    expect(find.text('9,000원'), findsOneWidget); // the row shows the price
     await tester.pump(const Duration(seconds: 5));
+
+    // An average alone: the gain over it, still no total.
+    await tester.tap(find.byTooltip('수량·평단 수정'));
+    await tester.pumpAndSettle();
+    await tester.enterText(find.widgetWithText(TextField, '평균 매수가 (선택)'), '10000');
+    await tester.tap(find.text('저장'));
+    await tester.pumpAndSettle();
+    expect(find.text('평단 대비 -10.00%'), findsOneWidget);
+    expect(find.text('평가금액'), findsNothing);
+    await tester.pump(const Duration(seconds: 5));
+  });
+
+  test('saved without amounts, read back', () async {
+    await Holdings.put(Holding('000001', '가'));
+    final h = Holdings.all().single;
+    expect(h.avg.isNaN && h.qty.isNaN, isTrue);
+    expect(h.rate(100).isNaN, isTrue);
+    expect(Holding('000001', '가', 80).rate(100), closeTo(25, 1e-9));
   });
 }

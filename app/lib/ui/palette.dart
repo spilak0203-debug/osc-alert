@@ -19,6 +19,9 @@ class Palette {
   /// the average lines.
   static const maBreak = Color(0xFFD946EF);
 
+  /// The average buy price of a holding on the candles.
+  static const avgPrice = Color(0xFF0891B2);
+
   static Palette of(BuildContext context) => Theme.of(context).brightness == Brightness.dark ? dark : light;
 
   Color change(double v) => v.isNaN || v == 0 ? flat : v > 0 ? up : down;

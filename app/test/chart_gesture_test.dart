@@ -64,6 +64,17 @@ void main() {
     expect(group.visible, lessThan(chartWindow));
   });
 
+  testWidgets('the average-price line draws inside and off the range', (tester) async {
+    for (final avg in [100.0, 1000.0, 1.0]) {
+      await tester.pumpWidget(MaterialApp(
+        home: Scaffold(
+          body: ChartPanel(type: ChartType.candle, bars: bars(250), cfg: RuleConfig(), group: ChartGroup(), avgPrice: avg),
+        ),
+      ));
+      expect(tester.takeException(), isNull);
+    }
+  });
+
   testWidgets('a slow pinch adds up', (tester) async {
     final c = await pump(tester);
     final a = await tester.startGesture(c - const Offset(40, 0), pointer: 1);
