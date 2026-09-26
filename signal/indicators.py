@@ -5,12 +5,12 @@
     골든 일치 (매수)  세 개가 **같은 날** 전부
         스토캐스틱  Slow 5-3-3 · %K가 %D 상향돌파  +  직전 %K < 20
         RSI(14)    시그널선(9) 상향돌파          +  직전 RSI < 30
-        CCI(20)    -100 상향돌파
+        CCI(14)    -100 상향돌파
 
     데드 일치 (매도)  세 개가 **같은 날** 전부
         스토캐스틱  Slow 5-3-3 · %K가 %D 하향돌파  +  직전 %K > 80
         RSI(14)    시그널선 하향돌파              +  직전 RSI > 70
-        CCI(20)    +100 하향돌파
+        CCI(14)    +100 하향돌파
 """
 import numpy as np
 import pandas as pd
@@ -19,7 +19,7 @@ STOCH_N, STOCH_D = 5, 3
 STOCH_LO, STOCH_HI = 20, 80
 RSI_N, RSI_SIG = 14, 9
 RSI_LO, RSI_HI = 30, 70
-CCI_N, CCI_BAND = 20, 100
+CCI_N, CCI_BAND = 14, 100   # 한국투자증권 HTS의 CCI와 같은 값 (2026-09 대조)
 MA_SPANS = (5, 20, 60, 120)
 MA_SPREAD = 0.015    # 전날 이평선 넷의 폭이 종가의 1.5% 안
 MA_SLOPE = 5         # 60·120일선이 5거래일 전보다 낮지 않음
@@ -71,10 +71,17 @@ def ma_breakout(frame):
 
 
 def cci(high, low, close, n=CCI_N):
+    """램버트의 CCI — 증권사 HTS와 같은 식. 평균편차는 **오늘의** n일 평균에서 최근 n일 각각이
+    떨어진 거리의 평균이다. (날마다 그날의 평균에서 떨어진 거리를 다시 n일 평균하면 값이
+    달라진다 — 예전 구현이 그랬다.)"""
     tp = (close + high + low) / 3
     sma = tp.rolling(n).mean()
-    mad = (tp - sma).abs().rolling(n).mean()
-    return (tp - sma) / (0.015 * mad.replace(0, np.nan))
+    v = tp.to_numpy(dtype=float)
+    md = np.full(len(v), np.nan)
+    if len(v) >= n:
+        w = np.lib.stride_tricks.sliding_window_view(v, n)
+        md[n - 1:] = np.abs(w - w.mean(axis=1, keepdims=True)).mean(axis=1)
+    return (tp - sma) / (0.015 * pd.Series(md, index=tp.index).replace(0, np.nan))
 
 
 def rsi(close, n=RSI_N, signal=RSI_SIG):

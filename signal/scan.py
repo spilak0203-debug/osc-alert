@@ -270,7 +270,7 @@ def run(limit=None, now=None, progress=print):
         scanned=len(frames), universe=len(uni), failed=len(failed), liquidity=LIQUIDITY,
         rules=dict(stochastic='Slow 5-3-3 · %K/%D 교차 · 직전 %K <20 / >80',
                    rsi='RSI(14) · 시그널(9) 교차 · 직전 RSI <30 / >70',
-                   cci='CCI(20) · -100 상향 / +100 하향',
+                   cci='CCI(14) · -100 상향 / +100 하향',
                    confluence='세 개가 같은 날 전부'),
         golden=golden, dead=dead), dict(
         asof=day.strftime('%Y-%m-%d'),

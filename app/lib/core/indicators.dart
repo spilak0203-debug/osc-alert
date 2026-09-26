@@ -5,7 +5,7 @@ library;
 
 import 'rule.dart';
 
-const int stochN = 5, stochD = 3, rsiN = 14, rsiSig = 9, cciN = 20;
+const int stochN = 5, stochD = 3, rsiN = 14, rsiSig = 9, cciN = 14;
 const List<int> maPeriods = [5, 20, 60, 120];
 
 class Series {
@@ -125,14 +125,20 @@ List<double> rsiLine(List<double> c, int n) {
 }
 
 /// Matches `(tp - sma) / (0.015 * mean(|tp - sma|))` where each deviation uses its own day's sma.
+/// Lambert's CCI, as brokers' charts draw it: the mean deviation is how far each of the last n
+/// typical prices is from **today's** n-day average.
 List<double> cciLine(List<double> h, List<double> l, List<double> c, int n) {
   final tp = List<double>.generate(c.length, (i) => (c[i] + h[i] + l[i]) / 3);
   final mean = sma(tp, n);
-  final dev = List<double>.generate(c.length, (i) => (tp[i] - mean[i]).abs());
-  final mad = sma(dev, n);
   final out = _nan(c.length);
-  for (var i = 0; i < c.length; i++) {
-    if (!mad[i].isNaN && mad[i] != 0) out[i] = (tp[i] - mean[i]) / (0.015 * mad[i]);
+  for (var i = n - 1; i < c.length; i++) {
+    if (mean[i].isNaN) continue;
+    var dev = 0.0;
+    for (var j = i - n + 1; j <= i; j++) {
+      dev += (tp[j] - mean[i]).abs();
+    }
+    dev /= n;
+    if (dev != 0) out[i] = (tp[i] - mean[i]) / (0.015 * dev);
   }
   return out;
 }

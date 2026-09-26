@@ -126,7 +126,7 @@ class _SettingsPageState extends State<SettingsPage> {
       sub('RSI (14 · 시그널 9)'),
       _toggle(Settings.rsiBand, '밴드 조건 사용', '끄면 RSI·시그널선이 교차하기만 하면 신호. 켜면 과매도 아래·과매수 위에서 교차할 때만'),
       _numbers(Settings.rsiLo, '과매도', Settings.rsiHi, '과매수'),
-      sub('CCI (20)'),
+      sub('CCI (14)'),
       _toggle(Settings.cciBand, '밴드 조건 사용', '켜면 ±기준선 돌파, 끄면 0선 돌파'),
       _numbers(Settings.cciLevel, '기준선 (±)', null, null),
       sub('이평선 밀집 돌파'),

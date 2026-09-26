@@ -30,6 +30,23 @@ class AppUpdate {
     final info = await PackageInfo.fromPlatform();
     versionCode = int.tryParse(info.buildNumber) ?? 0;
     versionName = info.version.split('.').take(2).join('.');
+    if (!Platform.isAndroid) cleanUp();
+  }
+
+  /// Windows: deletes the installers earlier updates left in the temp folder. They run after
+  /// this app has quit, so the next start is the first safe moment; one still in use (the
+  /// installer finishing as the new version starts) is left for the start after.
+  static Future<void> cleanUp() async {
+    try {
+      await for (final f in (await getTemporaryDirectory()).list()) {
+        final name = f.uri.pathSegments.last;
+        if (f is File && name.startsWith('osc-alert-setup-') && name.endsWith('.exe')) {
+          try {
+            await f.delete();
+          } catch (_) {}
+        }
+      }
+    } catch (_) {}
   }
 
   /// Latest published release for this platform, or null if there is none.

@@ -632,7 +632,7 @@ class _ChartPainter extends CustomPainter {
     _frame();
     _polyline(v, -m, m, colors.p.lineMain, 1.5);
     _crossings(rule.cciPart, v, -m, m, -level, level);
-    _header('CCI 20', 'CCI ${fixed1(v[at])}', colors.p.lineMain, null, null);
+    _header('CCI ${ind.cciN}', 'CCI ${fixed1(v[at])}', colors.p.lineMain, null, null);
   }
 
   /// Shaded zones beyond the two levels, with dashed lines and their labels on the axis.
