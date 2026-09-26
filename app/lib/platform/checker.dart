@@ -1,7 +1,9 @@
+import '../core/holdings.dart';
 import '../core/market_index.dart';
 import '../core/repo.dart';
 import '../core/settings.dart';
 import '../core/signals.dart' as signals;
+import '../core/stock.dart';
 import 'notifier.dart';
 
 DateTime seoulNowForChecker() => seoulNow();
@@ -17,7 +19,7 @@ class Checker {
     final asof = Repo.I.asof;
     if (asof.isEmpty) return;
     if (asof != st.string(Settings.notified, '')) {
-      await Notifier.post(asof, signals.alerts(stocks), '');
+      await Notifier.post(asof, signals.alerts(stocks), '', _holdings(stocks));
       await st.prefs.setString(Settings.notified, asof);
       return;
     }
@@ -26,8 +28,11 @@ class Checker {
     // Only repeat signals from a previous day — never on the evening they were first sent.
     final fromBefore = asof.compareTo(seoulDate(now)) < 0;
     if (st.flag(Settings.preMarket) && open && morning && fromBefore && asof != st.string(Settings.preMarketSent, '')) {
-      await Notifier.post(asof, signals.alerts(stocks), '[장 시작 전] ');
+      await Notifier.post(asof, signals.alerts(stocks), '[장 시작 전] ', _holdings(stocks));
       await st.prefs.setString(Settings.preMarketSent, asof);
     }
   }
+
+  static List<Stock> _holdings(List<Stock> stocks) =>
+      Settings.I.flag(Settings.alertHoldings) ? Holdings.falling(stocks) : const [];
 }

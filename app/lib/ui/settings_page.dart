@@ -69,6 +69,7 @@ class _SettingsPageState extends State<SettingsPage> {
       _toggle(Settings.alertCombo, '강도 높음 이상', '거래량 급증(전일 3배)·골든 교차${pairs ? '(2지표 이상)' : '(3지표)'}·이평선 밀집 돌파 중 2개면 높음, 3개면 매우 높음'),
       _toggle(Settings.alertMa, '이평선 밀집 돌파', '5·20·60·120일선이 ${st.maSpread}% 안에 모였다가 종가가 넷 다 위로 올라선 날'
           '${st.maRising == 'none' ? '' : ' (${Settings.maRisingLabels[st.maRising]} 상승 중)'}'),
+      _toggle(Settings.alertHoldings, '보유종목 하락 신호', '보유 탭에 넣은 종목에 데드크로스가 뜨면 따로 알림 (종목 필터와 상관없이)'),
       _toggle(Settings.alert3, '3지표 일치', '스토캐스틱·RSI·CCI가 모두 골든(또는 데드)크로스'),
       if (pairs) _toggle(Settings.alert2, '2지표 일치', '셋 중 둘만 일치해도 따로 알림'),
       _toggle(Settings.alertZoneIn, '과매도·과매수 진입', "'신호 조건'의 구간 판단 지표 수 이상이 구간에 새로 들어온 날"),
@@ -185,6 +186,7 @@ class _SettingsPageState extends State<SettingsPage> {
     final alertNames = [
       if (st.flag(Settings.alertCombo)) '강도 높음 이상',
       if (st.flag(Settings.alertMa)) '이평선 돌파',
+      if (st.flag(Settings.alertHoldings)) '보유 하락',
       if (st.flag(Settings.alert3)) '3지표',
       if (pairs && st.flag(Settings.alert2)) '2지표',
       if (st.flag(Settings.alertZoneIn)) '과매도·과매수 진입',

@@ -26,6 +26,8 @@ class Settings extends ChangeNotifier {
   static const alert3 = 'alert3', alert2 = 'alert2';
   static const alertZoneIn = 'alertZoneIn', alertZoneOut = 'alertZoneOut';
   static const alertMa = 'alertMa', alertCombo = 'alertCombo';
+  // A falling signal on one of the user's holdings
+  static const alertHoldings = 'alertHoldings';
   // Two of three indicators count as a signal (off: all three are needed)
   static const pairSignals = 'pairSignals';
   // Moving-average breakout: the 60- / 120-day average must be rising

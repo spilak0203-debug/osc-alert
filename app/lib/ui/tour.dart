@@ -4,6 +4,7 @@ import 'dart:ui' as ui;
 import 'package:flutter/rendering.dart';
 import 'package:flutter/material.dart';
 
+import '../core/holdings.dart';
 import '../core/repo.dart';
 import '../core/settings.dart';
 import '../core/signals.dart' as signals;
@@ -126,7 +127,19 @@ class Tour {
       await shot('3b-ma-breakout');
     }
 
-    home.show(2);
+    // The holdings tab with two sample holdings (the user's own are put back afterwards).
+    final kept = Settings.I.prefs.getString(Holdings.key);
+    final sample = Repo.I.stocks.where((s) => s.ticker == '005930' || s.ticker == '000660').toList();
+    for (final s in sample) {
+      await Holdings.put(Holding(s.ticker, s.name, (s.price() * 0.9).roundToDouble(), 10));
+    }
+    home.show(HomeState.holdingsTab);
+    await shot('4c-holdings');
+    await (kept == null ? Settings.I.prefs.remove(Holdings.key) : Settings.I.setString(Holdings.key, kept));
+    Repo.I.changed();
+    await shot('4d-holdings-empty');
+
+    home.show(HomeState.settingsTab);
     await shot('5-settings');
     final s = home.settingsScroll;
     if (s.hasClients) {
@@ -149,7 +162,7 @@ class Tour {
     await shot('8-dark-summary');
     await Settings.I.setString(Settings.themeKey, 'system');
 
-    home.show(2);
+    home.show(HomeState.settingsTab);
     await _pause(500);
     // Same path as tapping a notification.
     Notifier.tapped.value = signals.Kind.dead3;

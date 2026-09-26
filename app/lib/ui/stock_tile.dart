@@ -4,12 +4,14 @@ import 'package:url_launcher/url_launcher.dart';
 
 import '../core/bars.dart';
 import '../core/fmt.dart';
+import '../core/holdings.dart';
 import '../core/repo.dart';
 import '../core/rule.dart' as rule;
 import '../core/settings.dart';
 import '../core/signals.dart' as signals;
 import '../core/stock.dart';
 import 'chart.dart';
+import 'holdings_page.dart';
 import 'palette.dart';
 import 'toast.dart';
 
@@ -45,8 +47,6 @@ class StockTile extends StatelessWidget {
     final s = stock;
     final hits = signals.hits(s);
     final sub = [s.ticker, s.market, for (final h in hits) if (h.kind.zone) h.kind.label].join(' · ');
-    final chips = [for (final h in hits) if (!h.kind.zone) h];
-    final stacked = signals.overlap(hits);
     final fav = Settings.I.favorite(s.ticker);
     final head = InkWell(
       onTap: onTap,
@@ -60,14 +60,7 @@ class StockTile extends StatelessWidget {
             child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
               Text(s.name, maxLines: 1, overflow: TextOverflow.ellipsis, style: t.titleMedium),
               Text(sub, style: t.bodySmall!.copyWith(color: cs.onSurfaceVariant)),
-              if (chips.isNotEmpty)
-                Padding(
-                  padding: const EdgeInsets.only(top: 4),
-                  child: Wrap(spacing: 4, runSpacing: 4, children: [
-                    if (stacked >= 2) _Chip(stacked >= 3 ? '매우 높음' : '높음', p.side(true), solid: true),
-                    for (final h in chips) _Chip(h.chip(), p.side(h.kind.buySide)),
-                  ]),
-                ),
+              SignalChips(hits),
             ]),
           ),
           Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
@@ -102,6 +95,28 @@ class StockTile extends StatelessWidget {
         ),
       const Divider(height: 1, thickness: 1, indent: 16, endIndent: 16),
     ]);
+  }
+}
+
+/// A row's chips for today's signals (oversold/overbought left out), with the strength first.
+class SignalChips extends StatelessWidget {
+  const SignalChips(this.hits, {super.key});
+
+  final List<signals.Hit> hits;
+
+  @override
+  Widget build(BuildContext context) {
+    final p = Palette.of(context);
+    final chips = [for (final h in hits) if (!h.kind.zone) h];
+    if (chips.isEmpty) return const SizedBox.shrink();
+    final stacked = signals.overlap(hits);
+    return Padding(
+      padding: const EdgeInsets.only(top: 4),
+      child: Wrap(spacing: 4, runSpacing: 4, children: [
+        if (stacked >= 2) _Chip(stacked >= 3 ? '매우 높음' : '높음', p.side(true), solid: true),
+        for (final h in chips) _Chip(h.chip(), p.side(h.kind.buySide)),
+      ]),
+    );
   }
 }
 
@@ -260,7 +275,16 @@ class _StockDetailState extends State<StockDetail> {
       ...panels,
       Padding(
         padding: const EdgeInsets.fromLTRB(16, 8, 16, 0),
-        child: OutlinedButton(onPressed: () => openNaver(s), child: const Text('네이버증권에서 차트 보기')),
+        child: Row(children: [
+          Expanded(child: OutlinedButton(onPressed: () => openNaver(s), child: const Text('네이버증권에서 차트 보기'))),
+          const SizedBox(width: 8),
+          Expanded(
+            child: OutlinedButton(
+              onPressed: () => editHolding(context, s.ticker, s.name, s.price()),
+              child: Text(Holdings.of(s.ticker) == null ? '보유종목에 추가' : '보유 수량·평단 수정'),
+            ),
+          ),
+        ]),
       ),
     ]);
   }

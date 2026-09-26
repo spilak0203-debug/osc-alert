@@ -6,6 +6,7 @@ import 'package:path_provider/path_provider.dart';
 
 import 'bars.dart';
 import 'fmt.dart';
+import 'holdings.dart';
 import 'live.dart';
 import 'market_index.dart';
 import 'net.dart';
@@ -68,7 +69,8 @@ class Repo extends ChangeNotifier {
   }
 
   /// Re-downloads market.json, the indices and live quotes. `allQuotes` fetches every stock's
-  /// price (stocks tab); otherwise only the stocks that currently signal (dashboard).
+  /// price (stocks tab); otherwise only the stocks that currently signal (dashboard) and the
+  /// user's holdings.
   Future<void> refresh(bool allQuotes) async {
     if (loading) return;
     loading = true;
@@ -90,7 +92,7 @@ class Repo extends ChangeNotifier {
       if (allQuotes || wantAll) {
         Live.apply(fresh, await Live.all());
       } else {
-        final codes = <String>{};
+        final codes = Holdings.tickers();
         for (final l in signals.group(fresh).values) {
           for (final s in l) {
             codes.add(s.ticker);

@@ -7,6 +7,7 @@ import '../core/signals.dart' as signals;
 import '../core/stock.dart';
 import '../platform/app_update.dart';
 import '../platform/notifier.dart';
+import 'holdings_page.dart';
 import 'list_page.dart';
 import 'palette.dart';
 import 'settings_page.dart';
@@ -16,8 +17,8 @@ import 'toast.dart';
 /// Windows at least this wide get the navigation rail and the side detail pane.
 const double wideBreakpoint = 1000;
 
-/// Top bar (which close the signals are from, what the market is doing, refresh), the three
-/// tabs, and the bottom navigation — or, on a wide window, a rail and a detail pane.
+/// Top bar (which close the signals are from, what the market is doing, refresh), the four
+/// tabs (summary, stocks, holdings, settings), and the bottom navigation — or, on a wide window, a rail and a detail pane.
 class Home extends StatefulWidget {
   const Home({super.key});
 
@@ -30,15 +31,20 @@ class HomeState extends State<Home> {
   final stocksKey = GlobalKey<ListPageState>();
   final settingsScroll = ScrollController();
   int tab = 0;
+
+  /// Tab indices.
+  static const holdingsTab = 2, settingsTab = 3;
   Stock? selected;
 
   @override
   void initState() {
     super.initState();
     Notifier.tapped.addListener(_openTapped);
+    Notifier.tappedHoldings.addListener(_openHoldings);
     WidgetsBinding.instance.addPostFrameCallback((_) {
       Repo.I.ensure();
       _openTapped();
+      _openHoldings();
       _offerUpdate();
       Notifier.askPermission();
     });
@@ -47,6 +53,7 @@ class HomeState extends State<Home> {
   @override
   void dispose() {
     Notifier.tapped.removeListener(_openTapped);
+    Notifier.tappedHoldings.removeListener(_openHoldings);
     settingsScroll.dispose();
     super.dispose();
   }
@@ -58,6 +65,13 @@ class HomeState extends State<Home> {
     Notifier.tapped.value = null;
     show(0);
     WidgetsBinding.instance.addPostFrameCallback((_) => summaryKey.currentState?.jumpTo(kind));
+  }
+
+  /// From a holdings notification: the holdings tab.
+  void _openHoldings() {
+    if (!Notifier.tappedHoldings.value) return;
+    Notifier.tappedHoldings.value = false;
+    show(holdingsTab);
   }
 
   void jumpTo(signals.Kind kind) {
@@ -89,6 +103,7 @@ class HomeState extends State<Home> {
       final pages = [
         ListPage(key: summaryKey, summary: true, wide: wide, selected: selected?.ticker, onSelect: select),
         ListPage(key: stocksKey, summary: false, wide: wide, selected: selected?.ticker, onSelect: select),
+        HoldingsPage(wide: wide, selected: selected?.ticker, onSelect: select),
         SettingsPage(controller: settingsScroll),
       ];
       final body = IndexedStack(index: tab, children: pages);
@@ -149,10 +164,11 @@ class HomeState extends State<Home> {
       destinations: const [
         NavigationRailDestination(icon: Icon(Icons.list), label: Text('요약')),
         NavigationRailDestination(icon: Icon(Icons.show_chart), label: Text('종목')),
+        NavigationRailDestination(icon: Icon(Icons.account_balance_wallet_outlined), label: Text('보유')),
         NavigationRailDestination(icon: Icon(Icons.tune), label: Text('설정')),
       ],
     );
-    if (tab == 2) {
+    if (tab == settingsTab) {
       return Row(children: [rail, const VerticalDivider(width: 1), Expanded(child: pages)]);
     }
     return Row(children: [
@@ -270,6 +286,7 @@ class _BottomBar extends StatelessWidget {
   static const _items = [
     (Icons.list, '요약'),
     (Icons.show_chart, '종목'),
+    (Icons.account_balance_wallet_outlined, '보유'),
     (Icons.tune, '설정'),
   ];
 

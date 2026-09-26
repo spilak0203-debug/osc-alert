@@ -15,7 +15,7 @@ void main() {
     // Folded: summaries only, rules on top; two of three is off by default.
     expect(find.textContaining('3지표만 신호'), findsOneWidget);
     expect(find.textContaining('장기선 60·120일선 둘 다'), findsOneWidget);
-    expect(find.textContaining('받음: 강도 높음 이상 · 3지표'), findsOneWidget);
+    expect(find.textContaining('받음: 강도 높음 이상 · 보유 하락 · 3지표'), findsOneWidget);
     expect(find.text('2지표 일치도 신호로 보기'), findsNothing);
     expect(tester.getTopLeft(find.text('신호 조건')).dy, lessThan(tester.getTopLeft(find.text('알림')).dy));
 
