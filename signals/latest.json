@@ -1,6 +1,6 @@
 {
  "asof": "2026-09-30",
- "generated": "2026-09-30T07:01:48+00:00",
+ "generated": "2026-09-30T07:52:19+00:00",
  "scanned": 2634,
  "universe": 2654,
  "failed": 0,
@@ -13,16 +13,37 @@
  },
  "golden": [
   {
+   "ticker": "044340",
+   "name": "위닉스",
+   "market": "KOSDAQ",
+   "close": 2745.0,
+   "change": 1.86,
+   "k": 26.1,
+   "d": 18.4,
+   "rsi": 31.7,
+   "rsi_sig": 30.0,
+   "cci": -96.8,
+   "dv20": 213747032.0,
+   "liquid": false,
+   "golden": true,
+   "dead": false,
+   "parts": {
+    "stoch": true,
+    "rsi": true,
+    "cci": true
+   }
+  },
+  {
    "ticker": "133750",
    "name": "메가엠디",
    "market": "KOSDAQ",
-   "close": 1364.0,
-   "change": 2.79,
-   "k": 13.4,
-   "d": 12.5,
-   "rsi": 38.1,
-   "rsi_sig": 36.2,
-   "cci": -88.3,
+   "close": 1369.0,
+   "change": 3.17,
+   "k": 14.5,
+   "d": 12.8,
+   "rsi": 39.3,
+   "rsi_sig": 36.3,
+   "cci": -42.9,
    "dv20": 11238386.0,
    "liquid": false,
    "golden": true,
@@ -34,27 +55,5 @@
    }
   }
  ],
- "dead": [
-  {
-   "ticker": "043590",
-   "name": "웰킵스하이텍",
-   "market": "KOSDAQ",
-   "close": 1650.0,
-   "change": -6.25,
-   "k": 80.4,
-   "d": 87.7,
-   "rsi": 63.4,
-   "rsi_sig": 70.6,
-   "cci": 81.9,
-   "dv20": 34649543.0,
-   "liquid": false,
-   "golden": false,
-   "dead": true,
-   "parts": {
-    "stoch": true,
-    "rsi": true,
-    "cci": true
-   }
-  }
- ]
+ "dead": []
 }
