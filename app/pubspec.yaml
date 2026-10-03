@@ -1,7 +1,7 @@
 name: oscalert
 description: "매매 시그널 알림: oscillator confluence alerts for KOSPI and KOSDAQ."
 publish_to: 'none'
-version: 2.55.0+55
+version: 2.56.0+56
 
 environment:
   sdk: ^3.13.4

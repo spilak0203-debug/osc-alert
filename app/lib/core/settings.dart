@@ -176,7 +176,7 @@ class Settings extends ChangeNotifier {
   bool passes(Stock s) {
     final m = market;
     if (m != 'all' && m != s.market) return false;
-    final dv = _p.getDouble(filterDv) ?? 0, cap = _p.getDouble(filterCap) ?? 0;
+    final dv = number(filterDv), cap = number(filterCap);
     if (dv > 0 && !(s.dv20 >= dv * 1e8)) return false;
     // The signal day's close, so the lists and the alerts agree (an unknown close passes).
     final min = number(filterPrice);
@@ -188,7 +188,7 @@ class Settings extends ChangeNotifier {
   String filterSummary() {
     final parts = <String>[];
     if (market != 'all') parts.add(market);
-    final dv = _p.getDouble(filterDv) ?? 0, cap = _p.getDouble(filterCap) ?? 0;
+    final dv = number(filterDv), cap = number(filterCap);
     if (dv > 0) parts.add('거래대금 ${eok(dv)}↑');
     if (cap > 0) parts.add('시총 ${eok(cap)}↑');
     final min = number(filterPrice);

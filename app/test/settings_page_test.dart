@@ -37,4 +37,30 @@ void main() {
     expect(find.text('강도 높음 이상'), findsOneWidget);
     expect(find.text('2지표 일치'), findsNothing); // hidden while two of three is off
   });
+
+  testWidgets('filter minimums are typed in', (tester) async {
+    SharedPreferences.setMockInitialValues({});
+    await Settings.init();
+    await tester.binding.setSurfaceSize(const Size(800, 3000));
+    await tester.pumpWidget(const MaterialApp(home: Scaffold(body: SettingsPage())));
+    await tester.pump();
+    expect(find.textContaining('거래대금 제한 없음 · 시총 제한 없음 · 주가 4,000원↑'), findsOneWidget);
+    await tester.tap(find.text('종목 필터'));
+    await tester.pumpAndSettle();
+    final price = find.widgetWithText(TextField, '주가 · 신호가 나온 날 종가 (원)');
+    expect(find.descendant(of: price, matching: find.text('4,000')), findsOneWidget);
+    await tester.enterText(price, '2500');
+    await tester.enterText(find.widgetWithText(TextField, '시가총액 (억원)'), '12345');
+    await tester.enterText(find.widgetWithText(TextField, '20일 평균 거래대금 (억원)'), '3');
+    await tester.pump();
+    expect(Settings.I.number(Settings.filterPrice), 2500);
+    expect(Settings.I.number(Settings.filterCap), 12345);
+    expect(find.text('12,345'), findsOneWidget);
+    expect(find.text('1조 2,345억원 이상'), findsOneWidget); // the amount in words under the field
+    expect(find.text('2,500원 이상'), findsOneWidget);
+    expect(Settings.I.filterSummary(), '거래대금 3억↑ · 시총 12,345억↑ · 주가 2,500원↑');
+    await tester.enterText(price, '');
+    await tester.pump();
+    expect(Settings.I.number(Settings.filterPrice), 0); // blank: no limit
+  });
 }

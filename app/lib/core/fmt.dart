@@ -47,8 +47,30 @@ String fixed1(double v) => v.isNaN ? '-' : v.toStringAsFixed(1);
 
 String axis(double v) => v.abs() >= 1000 ? grouped(v) : v.toStringAsFixed(0);
 
-/// Filter amounts in 억원: "1조" or "5,000억".
-String eok(double v) => v >= 10000 ? '${grouped(v / 10000)}조' : '${grouped(v)}억';
+/// Filter amounts in 억원: "1조", "5,000억", "12,345억" (조 only when it is whole), "0.5억".
+String eok(double v) =>
+    v >= 10000 && v % 10000 == 0 ? '${grouped(v / 10000)}조' : '${grouped(v, v == v.roundToDouble() ? 0 : 1)}억';
+
+/// An amount of won as it is said: 5,000,000 → "5백만원", 12,345억 → "1조 2,345억원",
+/// 4,000 → "4천원", 1,234,500 → "123만 4,500원". Each 4-digit group (조, 억, 만, the rest) is a
+/// round 천 or 백 in words, otherwise in digits. "" for nothing.
+String wonReading(double won) {
+  var n = won.isNaN ? 0 : won.round();
+  if (n <= 0) return '';
+  String group(int g) => g % 1000 == 0 && g < 10000
+      ? '${g ~/ 1000}천'
+      : g % 100 == 0 && g < 1000
+          ? '${g ~/ 100}백'
+          : grouped(g.toDouble());
+  final parts = <String>[];
+  for (final unit in ['', '만', '억', '조']) {
+    final g = unit == '조' ? n : n % 10000;
+    if (g > 0) parts.insert(0, '${group(g)}$unit');
+    n ~/= 10000;
+    if (n == 0) break;
+  }
+  return '${parts.join(' ')}원';
+}
 
 String two(int v) => v.toString().padLeft(2, '0');
 

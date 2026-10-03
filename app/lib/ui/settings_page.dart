@@ -10,6 +10,7 @@ import '../core/settings.dart';
 import '../platform/app_update.dart';
 import '../platform/desktop.dart';
 import '../platform/notifier.dart';
+import 'grouped_digits.dart';
 import 'toast.dart';
 
 /// Alerts, stock filter, signal rules, display and app updates, each group in a card. Every
@@ -102,17 +103,14 @@ class _SettingsPageState extends State<SettingsPage> {
       label('시장'),
       _choice(st.market, const [['all', '전체'], ['코스피', '코스피'], ['코스닥', '코스닥']],
           (v) => st.setString(Settings.filterMarket, v)),
-      label('20일 평균 거래대금 최소'),
-      _choice(_amount(Settings.filterDv), const [['0', '없음'], ['1', '1억'], ['5', '5억'], ['10', '10억'], ['50', '50억']],
-          (v) => st.setNumber(Settings.filterDv, double.parse(v))),
-      label('시가총액 최소'),
-      _choice(_amount(Settings.filterCap),
-          const [['0', '없음'], ['500', '500억'], ['1000', '1천억'], ['5000', '5천억'], ['10000', '1조']],
-          (v) => st.setNumber(Settings.filterCap, double.parse(v))),
-      label('주가 최소 · 신호가 나온 날 종가 기준'),
-      _choice(st.number(Settings.filterPrice).toStringAsFixed(0),
-          const [['0', '없음'], ['1000', '1천원'], ['2000', '2천원'], ['4000', '4천원'], ['10000', '1만원']],
-          (v) => st.setNumber(Settings.filterPrice, double.parse(v))),
+      label('최솟값 · 비우거나 0이면 제한 없음'),
+      _MinField(key: const ValueKey(Settings.filterDv), settingKey: Settings.filterDv, label: '20일 평균 거래대금', unit: '억원'),
+      _MinField(key: const ValueKey(Settings.filterCap), settingKey: Settings.filterCap, label: '시가총액', unit: '억원'),
+      _MinField(
+          key: const ValueKey(Settings.filterPrice),
+          settingKey: Settings.filterPrice,
+          label: '주가 · 신호가 나온 날 종가',
+          unit: '원'),
     ];
 
     final rules = <Widget>[
@@ -183,8 +181,8 @@ class _SettingsPageState extends State<SettingsPage> {
     // What each folded card says about itself.
     String onOff(String key) => st.flag(key) ? '켬' : '끔';
     String amount(String key, String none) {
-      final v = st.prefs.getDouble(key) ?? 0;
-      return v <= 0 ? none : '${v >= 10000 ? '${(v / 10000).toStringAsFixed(0)}조' : v >= 1000 ? '${(v / 1000).toStringAsFixed(0)}천억' : '${v.toStringAsFixed(0)}억'}↑';
+      final v = st.number(key);
+      return v <= 0 ? none : '${eok(v)}↑';
     }
 
     final window = st.integer(Settings.windowKey);
@@ -301,8 +299,6 @@ class _SettingsPageState extends State<SettingsPage> {
     Toaster.show('글자 크기 ${(next * 100).round()}%');
   }
 
-  String _amount(String key) => (st.prefs.getDouble(key) ?? 0).toStringAsFixed(0);
-
   /// "4,000원↑", or "제한 없음".
   String _price() {
     final v = st.number(Settings.filterPrice);
@@ -371,6 +367,58 @@ class _SettingsPageState extends State<SettingsPage> {
         child: filled
             ? FilledButton(onPressed: onPressed, child: Text(text))
             : OutlinedButton(onPressed: onPressed, child: Text(text)),
+      );
+}
+
+/// A filter minimum typed in: grouped as it is typed, blank or 0 for no limit, saved on every
+/// change.
+class _MinField extends StatefulWidget {
+  const _MinField({super.key, required this.settingKey, required this.label, required this.unit});
+
+  final String settingKey, label, unit;
+
+  /// Won per unit typed: 억원 fields are read out in won.
+  double get scale => unit == '억원' ? 1e8 : 1;
+
+  @override
+  State<_MinField> createState() => _MinFieldState();
+}
+
+class _MinFieldState extends State<_MinField> {
+  late final TextEditingController _c = TextEditingController(text: _text(Settings.I.number(widget.settingKey)));
+  late double _value = Settings.I.number(widget.settingKey);
+
+  static String _text(double v) =>
+      v <= 0 ? '' : GroupedDigits.format(v == v.roundToDouble() ? v.toStringAsFixed(0) : '$v');
+
+  @override
+  void dispose() {
+    _c.dispose();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) => Padding(
+        padding: const EdgeInsets.only(top: 8),
+        child: TextField(
+          controller: _c,
+          keyboardType: const TextInputType.numberWithOptions(decimal: true),
+          inputFormatters: [GroupedDigits()],
+          decoration: InputDecoration(
+            // The unit in the title, the amount in words at the field's right end (5,000,000 is
+            // "5백만원 이상"), so the field stays one line.
+            labelText: '${widget.label} (${widget.unit})',
+            hintText: '제한 없음',
+            suffixText: _value > 0 ? '${wonReading(_value * widget.scale)} 이상' : null,
+            suffixStyle: Theme.of(context).textTheme.bodySmall!.copyWith(color: Theme.of(context).colorScheme.onSurfaceVariant),
+            border: const OutlineInputBorder(),
+          ),
+          onChanged: (s) {
+            final v = double.tryParse(s.replaceAll(',', '')) ?? 0;
+            setState(() => _value = v < 0 ? 0 : v);
+            Settings.I.setNumber(widget.settingKey, _value);
+          },
+        ),
       );
 }
 
