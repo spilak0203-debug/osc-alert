@@ -197,6 +197,10 @@ class _StockDetailState extends State<StockDetail> {
   Bars? bars;
   String? error;
 
+  /// Themes beyond the first `_themesShown` are behind a "+N개 더" tag.
+  bool _allThemes = false;
+  static const _themesShown = 8;
+
   @override
   void initState() {
     super.initState();
@@ -368,7 +372,18 @@ class _StockDetailState extends State<StockDetail> {
         );
     return Wrap(spacing: 6, runSpacing: 6, crossAxisAlignment: WrapCrossAlignment.center, children: [
       if (s.industry.isNotEmpty) tag(s.industry, theme: false),
-      for (final th in s.themes) tag(th, theme: true),
+      for (final th in _allThemes ? s.themes : s.themes.take(_themesShown)) tag(th, theme: true),
+      if (!_allThemes && s.themes.length > _themesShown)
+        TextButton(
+          onPressed: () => setState(() => _allThemes = true),
+          style: TextButton.styleFrom(
+            visualDensity: VisualDensity.compact,
+            padding: const EdgeInsets.symmetric(horizontal: 8),
+            minimumSize: Size.zero,
+            tapTargetSize: MaterialTapTargetSize.shrinkWrap,
+          ),
+          child: Text('테마 +${s.themes.length - _themesShown}개 더'),
+        ),
     ]);
   }
 
