@@ -18,7 +18,10 @@ void main() {
   test('the changelog\'s top entry is this version', () {
     final log = jsonDecode(File('assets/changelog.json').readAsStringSync()) as List;
     final name = '${m!.group(1)}.${m.group(2)}.${m.group(3)}';
-    expect((log.first as Map)['version'], AppUpdate.displayVersion(name));
+    // Changes waiting for the next release sit in an entry with no version on top; the release
+    // gives it the new name in the same commit that raises pubspec's version.
+    final released = (log.first as Map)['version'] == null ? log[1] as Map : log.first as Map;
+    expect(released['version'], AppUpdate.displayVersion(name));
     final versions = [for (final e in log) (e as Map)['version']].whereType<String>().toList();
     expect(versions.toSet().length, versions.length, reason: 'each version once');
   });

@@ -87,8 +87,10 @@ The version is `version: <name>+<build>` in `app/pubspec.yaml`, e.g. `2.55.0+55`
   `v<build>`), and it continues the earlier numbering (`v1`–`v54`, whose names were 2.1–2.54), so
   installed apps, the Java one included, update over it with settings and favourites kept.
 - The name is shown without a zero patch: 2.55.0 is "2.55", 2.55.1 is "2.55.1".
-- The top entry of `app/assets/changelog.json` has the same name and lists the user-visible
-  changes; it becomes the release notes. `test/version_test.dart` checks they match.
+- `app/assets/changelog.json` lists the user-visible changes per version, newest first. Changes
+  not released yet go in a top entry with `"version": null`; the release gives that entry the new
+  name in the same commit that raises the version, and it becomes the release notes.
+  `test/version_test.dart` checks that the newest named entry matches `pubspec.yaml`.
 
 A push to `main` that touches `app/` releases when its build number has no release yet: the
 tests, the APK and the Windows installer (Inno Setup), then release `v<build>` with both. Any other
