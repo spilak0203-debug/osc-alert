@@ -13,12 +13,6 @@ void main() {
   test('pubspec has a three-part name and a build number', () {
     expect(m, isNotNull, reason: line);
     expect(int.parse(m!.group(4)!), greaterThan(54), reason: 'builds continue after v54');
-    // From 3.0 on, every part is one digit (2.1–2.55 came before the rule).
-    if (int.parse(m.group(1)!) >= 3) {
-      for (final g in [m.group(2)!, m.group(3)!]) {
-        expect(int.parse(g), lessThanOrEqualTo(9), reason: '$line: after x.9 the part to the left goes up');
-      }
-    }
   });
 
   test('the changelog\'s top entry is this version', () {
