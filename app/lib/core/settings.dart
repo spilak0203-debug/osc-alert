@@ -50,6 +50,7 @@ class Settings extends ChangeNotifier {
   static const filterMarket = 'filterMarket'; // all | 코스피 | 코스닥
   static const filterDv = 'filterDv'; // minimum 20-day average trading value, 억원
   static const filterCap = 'filterCap'; // minimum market cap, 억원
+  static const filterPrice = 'filterPrice'; // minimum signal-day close, 원 (default 4,000)
   // Display
   static const themeKey = 'theme'; // system | light | dark
   static const fontScaleKey = 'fontScale';
@@ -103,6 +104,8 @@ class Settings extends ChangeNotifier {
         return 100;
       case maSpreadKey:
         return 1.5;
+      case filterPrice:
+        return 4000;
       default:
         return 0;
     }
@@ -175,6 +178,9 @@ class Settings extends ChangeNotifier {
     if (m != 'all' && m != s.market) return false;
     final dv = _p.getDouble(filterDv) ?? 0, cap = _p.getDouble(filterCap) ?? 0;
     if (dv > 0 && !(s.dv20 >= dv * 1e8)) return false;
+    // The signal day's close, so the lists and the alerts agree (an unknown close passes).
+    final min = number(filterPrice);
+    if (min > 0 && s.close < min) return false;
     return cap <= 0 || s.cap >= cap; // market.json keeps the cap in 억원
   }
 
@@ -185,6 +191,8 @@ class Settings extends ChangeNotifier {
     final dv = _p.getDouble(filterDv) ?? 0, cap = _p.getDouble(filterCap) ?? 0;
     if (dv > 0) parts.add('거래대금 ${eok(dv)}↑');
     if (cap > 0) parts.add('시총 ${eok(cap)}↑');
+    final min = number(filterPrice);
+    if (min > 0) parts.add('주가 ${grouped(min)}원↑');
     return parts.join(' · ');
   }
 

@@ -29,7 +29,7 @@ class AppUpdate {
   static Future<void> init() async {
     final info = await PackageInfo.fromPlatform();
     versionCode = int.tryParse(info.buildNumber) ?? 0;
-    versionName = info.version.split('.').take(2).join('.');
+    versionName = displayVersion(info.version);
     if (!Platform.isAndroid) cleanUp();
   }
 
@@ -48,6 +48,11 @@ class AppUpdate {
       }
     } catch (_) {}
   }
+
+  /// "2.55.0" → "2.55", "2.55.1" → "2.55.1": a zero patch is left off, as on the releases.
+  static String displayVersion(String name) => name.endsWith('.0') && name.split('.').length == 3
+      ? name.substring(0, name.length - 2)
+      : name;
 
   /// Latest published release for this platform, or null if there is none.
   static Future<Release?> latest() async {

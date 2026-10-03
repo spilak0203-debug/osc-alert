@@ -1,9 +1,10 @@
 name: release
 
-# Builds the Flutter app for Android and Windows from `app/`. On main, each build is published
-# as GitHub release `v<run number>` (version 2.<run number>) with `osc-alert.apk` and
-# `osc-alert-setup.exe`, so both apps can update themselves. The run number continues the
-# Java app's numbering, so its updater installs the Flutter build over it.
+# Releases the version in `app/pubspec.yaml` (`version: <name>+<build>`, see "Releases" in the
+# README). When main gets a build number that has no release yet, the app is built for Android
+# and Windows and published as GitHub release `v<build>` titled with the name, with
+# `osc-alert.apk`, `osc-alert-setup.exe` and the changelog's top entry as notes, so both apps
+# can update themselves. Any other push to main only runs the analyzer and the tests.
 on:
   push:
     branches: [main]
@@ -14,7 +15,53 @@ permissions:
   contents: write
 
 jobs:
+  version:
+    runs-on: ubuntu-latest
+    outputs:
+      name: ${{ steps.v.outputs.name }}
+      title: ${{ steps.v.outputs.title }}
+      build: ${{ steps.v.outputs.build }}
+      release: ${{ steps.v.outputs.release }}
+    steps:
+      - uses: actions/checkout@v4
+      - id: v
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          v=$(sed -n 's/^version: *//p' app/pubspec.yaml)
+          name=${v%+*}
+          build=${v#*+}
+          # 2.55.0 is shown as 2.55; 2.55.1 as is.
+          title=${name%.0}
+          if gh release view "v$build" >/dev/null 2>&1; then release=false; else release=true; fi
+          echo "name=$name" >> "$GITHUB_OUTPUT"
+          echo "title=$title" >> "$GITHUB_OUTPUT"
+          echo "build=$build" >> "$GITHUB_OUTPUT"
+          echo "release=$release" >> "$GITHUB_OUTPUT"
+          echo "version $name (build $build) · release: $release"
+
+  # No new build number: nothing to publish, just check the code.
+  check:
+    needs: version
+    if: needs.version.outputs.release != 'true'
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    defaults:
+      run:
+        working-directory: app
+    steps:
+      - uses: actions/checkout@v4
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+      - run: flutter pub get
+      - run: flutter analyze --no-fatal-infos
+      - run: flutter test
+
   android:
+    needs: version
+    if: needs.version.outputs.release == 'true'
     runs-on: ubuntu-latest
     timeout-minutes: 40
     defaults:
@@ -45,8 +92,7 @@ jobs:
           if [ -n "$STORE_PASSWORD" ]; then
             printf 'storePassword=%s\nkeyPassword=%s\n' "$STORE_PASSWORD" "$STORE_PASSWORD" >> android/gradle.properties
           fi
-          flutter build apk --release --build-name 2.${{ github.run_number }} --build-number ${{ github.run_number }} \
-            --dart-define=REPO=${{ github.repository }}
+          flutter build apk --release --dart-define=REPO=${{ github.repository }}
           cp build/app/outputs/flutter-apk/app-release.apk ../osc-alert.apk
       - uses: actions/upload-artifact@v4
         with:
@@ -54,6 +100,8 @@ jobs:
           path: osc-alert.apk
 
   windows:
+    needs: version
+    if: needs.version.outputs.release == 'true'
     runs-on: windows-latest
     timeout-minutes: 40
     defaults:
@@ -65,14 +113,14 @@ jobs:
         with:
           channel: stable
           cache: true
-      # Windows needs a three-part version (major.minor.patch) or it falls back to 1.0.0.
-      - run: flutter build windows --release --build-name 2.${{ github.run_number }}.0 --build-number ${{ github.run_number }} --dart-define=REPO=${{ github.repository }}
+      # The three-part name from pubspec.yaml (Windows falls back to 1.0.0 without one).
+      - run: flutter build windows --release --dart-define=REPO=${{ github.repository }}
       - name: installer
         shell: pwsh
         run: |
           $iscc = "${env:ProgramFiles(x86)}\Inno Setup 6\ISCC.exe"
           if (-not (Test-Path $iscc)) { choco install innosetup -y --no-progress; }
-          & $iscc /DAppVersion=2.${{ github.run_number }} "/DBuildDir=$PWD\build\windows\x64\runner\Release" windows\installer.iss
+          & $iscc /DAppVersion=${{ needs.version.outputs.title }} "/DBuildDir=$PWD\build\windows\x64\runner\Release" windows\installer.iss
           if ($LASTEXITCODE -ne 0) { exit 1 }
           Copy-Item build\installer\osc-alert-setup.exe ..\osc-alert-setup.exe
       - uses: actions/upload-artifact@v4
@@ -82,7 +130,7 @@ jobs:
 
   publish:
     if: github.ref == 'refs/heads/main'
-    needs: [android, windows]
+    needs: [version, android, windows]
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
@@ -94,7 +142,8 @@ jobs:
         env:
           GH_TOKEN: ${{ github.token }}
         run: |
-          gh release create "v${{ github.run_number }}" out/osc-alert.apk out/osc-alert-setup.exe \
-            --title "2.${{ github.run_number }}" \
-            --notes "$(git log -1 --format=%s)" \
+          python3 -c "import json; e = json.load(open('app/assets/changelog.json', encoding='utf-8'))[0]; print('\n'.join('- ' + i for i in e['items']))" > notes.md
+          gh release create "v${{ needs.version.outputs.build }}" out/osc-alert.apk out/osc-alert-setup.exe \
+            --title "${{ needs.version.outputs.title }}" \
+            --notes-file notes.md \
             --latest

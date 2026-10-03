@@ -74,11 +74,26 @@ If notifications arrive late or not at all, disable **battery optimization** for
 
 ## Releases
 
-Every push to `main` that touches `app/` runs the tests, builds the APK and the Windows installer
-(Inno Setup) and publishes release `v<run number>` (version 2.<run number>) with both. The app
-compares that number with its own build number. The numbering continues the earlier Java app's,
-whose updater installs the Flutter build over it; settings and favourites carry over. The `market-data`
-pre-release holds the daily snapshot and never counts as the latest release.
+The version is `version: <name>+<build>` in `app/pubspec.yaml`, e.g. `2.55.0+55`.
+
+| Change | Name | Build |
+|---|---|---|
+| New feature or a visible change | minor + 1, patch 0 (2.55.0 → 2.56.0) | + 1 |
+| Bug fixes only | patch + 1 (2.56.0 → 2.56.1) | + 1 |
+| A redesign, or a break with old data or settings | major + 1 (→ 3.0.0) | + 1 |
+| Refactoring, tests, docs | unchanged — no release | unchanged |
+
+- The build number only goes up, by one per release. It is what the apps compare (release tag
+  `v<build>`), and it continues the earlier numbering (`v1`–`v54`, whose names were 2.1–2.54), so
+  installed apps, the Java one included, update over it with settings and favourites kept.
+- The name is shown without a zero patch: 2.55.0 is "2.55", 2.55.1 is "2.55.1".
+- The top entry of `app/assets/changelog.json` has the same name and lists the user-visible
+  changes; it becomes the release notes. `test/version_test.dart` checks they match.
+
+A push to `main` that touches `app/` releases when its build number has no release yet: the
+tests, the APK and the Windows installer (Inno Setup), then release `v<build>` with both. Any other
+push to `main` only runs the analyzer and the tests. The `market-data` pre-release holds the daily
+snapshot and never counts as the latest release.
 
 ## Running locally
 

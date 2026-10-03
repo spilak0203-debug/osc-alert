@@ -4,6 +4,7 @@ import 'dart:io';
 import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 
+import '../core/fmt.dart';
 import '../core/rule.dart' as rule;
 import '../core/settings.dart';
 import '../platform/app_update.dart';
@@ -108,6 +109,10 @@ class _SettingsPageState extends State<SettingsPage> {
       _choice(_amount(Settings.filterCap),
           const [['0', '없음'], ['500', '500억'], ['1000', '1천억'], ['5000', '5천억'], ['10000', '1조']],
           (v) => st.setNumber(Settings.filterCap, double.parse(v))),
+      label('주가 최소 · 신호가 나온 날 종가 기준'),
+      _choice(st.number(Settings.filterPrice).toStringAsFixed(0),
+          const [['0', '없음'], ['1000', '1천원'], ['2000', '2천원'], ['4000', '4천원'], ['10000', '1만원']],
+          (v) => st.setNumber(Settings.filterPrice, double.parse(v))),
     ];
 
     final rules = <Widget>[
@@ -198,7 +203,7 @@ class _SettingsPageState extends State<SettingsPage> {
           'RSI ${onOff(Settings.rsiBand)}·CCI ${onOff(Settings.cciBand)} · 이평선 돌파 폭 ${st.maSpread}%·장기선 ${Settings.maRisingLabels[st.maRising]}',
       _Group.alerts: alertNames.isEmpty ? '받을 알림 없음' : '받음: ${alertNames.join(' · ')}',
       _Group.filter: '${st.market == 'all' ? '전체 시장' : st.market} · 거래대금 ${amount(Settings.filterDv, '제한 없음')} · '
-          '시총 ${amount(Settings.filterCap, '제한 없음')}',
+          '시총 ${amount(Settings.filterCap, '제한 없음')} · 주가 ${_price()}',
       _Group.display: '테마 ${const {'system': '기기 설정', 'light': '라이트', 'dark': '다크'}[st.theme] ?? st.theme} · '
           '글자 ${(st.fontScale * 100).round()}% · 복사 ${st.flag(Settings.copyName) ? '종목명' : '종목코드'}'
           '${Desktop.supported ? ' · 트레이 ${onOff(Settings.trayOnClose)}' : ''}',
@@ -297,6 +302,12 @@ class _SettingsPageState extends State<SettingsPage> {
   }
 
   String _amount(String key) => (st.prefs.getDouble(key) ?? 0).toStringAsFixed(0);
+
+  /// "4,000원↑", or "제한 없음".
+  String _price() {
+    final v = st.number(Settings.filterPrice);
+    return v <= 0 ? '제한 없음' : '${grouped(v)}원↑';
+  }
 
   Widget _toggle(String key, String title, String hint, {Future<void> Function(bool)? onChanged}) {
     final t = Theme.of(context).textTheme;
