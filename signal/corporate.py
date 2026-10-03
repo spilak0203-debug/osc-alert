@@ -55,6 +55,14 @@ def key():
     return os.environ.get('DART_API_KEY', '').strip()
 
 
+def safe(exc):
+    """An error's text without the key: a failed request's message carries its URL, which has
+    `crtfc_key=` in it (the Actions log is public; GitHub masks the secret too, this is the
+    second lock)."""
+    text = re.sub(r"crtfc_key=[^&\s'\")]*", 'crtfc_key=***', str(exc))
+    return text.replace(key(), '***') if key() else text
+
+
 def _get(path, **params):
     j = requests.get(f'{API}/{path}', params=dict(crtfc_key=key(), **params), timeout=TIMEOUT).json()
     status = str(j.get('status'))
@@ -252,7 +260,7 @@ def fetch_rows(today=None, log=print):
     try:
         rows = listing_rows(today or date.today())
     except Exception as exc:
-        log(f'  기업행위: 공시 목록 실패 - {str(exc)[:120]}')
+        log(f'  기업행위: 공시 목록 실패 - {safe(exc)[:160]}')
         return None
     log(f'  기업행위: 공시 목록 {len(rows)}건 · {time.time() - started:.0f}초')
     return rows
@@ -288,7 +296,7 @@ def events(codes, asof, rows, log=print):
                 if (e.get('e') or '') >= asof.isoformat():
                     out.setdefault(code, []).append(e)
         except Quota as exc:
-            log(f'  기업행위: DART 하루 한도 - {exc}')
+            log(f'  기업행위: DART 하루 한도 - {safe(exc)}')
     log(f'  기업행위: 사건 {len(jobs)}건 · 진행 중 {sum(map(len, out.values()))}건 '
         f'({len(out)}종목) · 상세 {time.time() - started:.0f}초')
     return out

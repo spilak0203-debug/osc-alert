@@ -97,6 +97,13 @@ class Events(unittest.TestCase):
         self.assertEqual(list(got), ['000001'])                   # 감자는 끝났고, 999999는 대상 밖
         self.assertEqual(got['000001'][0]['k'], '무상증자')
 
+    def test_errors_never_show_the_key(self):
+        with mock.patch.dict('os.environ', {'DART_API_KEY': 'abc123'}):
+            exc = RuntimeError("Max retries exceeded with url: /api/list.json?crtfc_key=abc123&page_no=2 (Caused by x)")
+            self.assertNotIn('abc123', corp.safe(exc))
+            self.assertIn('crtfc_key=***&page_no=2', corp.safe(exc))
+            self.assertEqual(corp.safe(RuntimeError('key abc123 bad')), 'key *** bad')
+
     def test_no_rows_no_events(self):
         self.assertEqual(corp.events(['000001'], date(2026, 10, 2), None), {})
         with mock.patch.dict('os.environ', {'DART_API_KEY': ''}):
