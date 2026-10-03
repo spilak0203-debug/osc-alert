@@ -50,7 +50,11 @@ class Repo extends ChangeNotifier {
   List<Stock> parse(String text) {
     final root = jsonDecode(text) as Map<String, dynamic>;
     final rows = root['stocks'] as List;
-    final out = [for (final r in rows) Stock.parse(r as Map<String, dynamic>)];
+    List<String> names(Object? l) => l is List ? [for (final x in l) '$x'] : const [];
+    final industries = names(root['industries']), themes = names(root['themes']);
+    final out = [
+      for (final r in rows) Stock.parse(r as Map<String, dynamic>, industries: industries, themes: themes),
+    ];
     asof = '${root['asof'] ?? ''}';
     return out;
   }

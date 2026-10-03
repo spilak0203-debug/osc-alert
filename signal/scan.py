@@ -31,6 +31,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent))
 import corporate as corp  # noqa: E402
 import indicators as ind  # noqa: E402
 import rule as rl  # noqa: E402
+import sectors  # noqa: E402
 
 ROOT = Path(__file__).resolve().parents[1]
 OUT = ROOT / 'signals'
@@ -239,9 +240,10 @@ def run(limit=None, now=None, progress=print):
     end = now.date().strftime('%Y%m%d')
     frames, failed = {}, []
     jobs = [(t, start, end, now) for t in uni.ticker]
-    # 기업행위 공시 목록은 일봉을 받는 동안 따로 받는다.
-    side = concurrent.futures.ThreadPoolExecutor(max_workers=1)
+    # 기업행위 공시 목록과 업종 · 테마는 일봉을 받는 동안 따로 받는다.
+    side = concurrent.futures.ThreadPoolExecutor(max_workers=2)
     dart = side.submit(corp.fetch_rows, now.date(), progress)
+    groups = side.submit(sectors.fetch, _get, progress)
     with concurrent.futures.ThreadPoolExecutor(max_workers=WORKERS) as pool:
         for n, (t, f, err) in enumerate(pool.map(scan_one, jobs), 1):
             if f is None:
@@ -272,6 +274,15 @@ def run(limit=None, now=None, progress=print):
     for r in market:
         if r['t'] in actions:
             r['ca'] = actions[r['t']]
+    # 업종 · 테마: 이름은 맨 위 목록에 한 번씩, 종목엔 번호만 — ind 업종 번호, th 테마 번호들 (앱 2.58부터)
+    industry, theme = groups.result()
+    industries, ind_of = sectors.table(industry)
+    themes, th_of = sectors.table(theme)
+    for r in market:
+        if r['t'] in ind_of:
+            r['ind'] = ind_of[r['t']][0]
+        if r['t'] in th_of:
+            r['th'] = th_of[r['t']]
     market.sort(key=lambda r: -(r['cap'] or 0))
     golden = sorted([r for r in rows if r['golden']], key=lambda r: -(r['dv20'] or 0))
     dead = sorted([r for r in rows if r['dead']], key=lambda r: -(r['dv20'] or 0))
@@ -286,7 +297,7 @@ def run(limit=None, now=None, progress=print):
         golden=golden, dead=dead), dict(
         asof=day.strftime('%Y-%m-%d'),
         generated=datetime.now(timezone.utc).isoformat(timespec='seconds'),
-        liquidity=LIQUIDITY, stocks=market)
+        liquidity=LIQUIDITY, industries=industries, themes=themes, stocks=market)
 
 
 def save(payload, market):
@@ -318,6 +329,10 @@ def main():
           f"(실패 {payload['failed']})")
     print(f"골든 일치 {len(payload['golden'])}건 (거래대금 5억↑ {len(liquid)}건) · "
           f"데드 일치 {len(payload['dead'])}건")
+    names = market['industries']
+    print(f"업종 {len(names)}개 · {sum('ind' in r for r in market['stocks'])}종목, 테마 {len(market['themes'])}개 · "
+          f"{sum('th' in r for r in market['stocks'])}종목 (예: " + ', '.join(
+              f"{r['n']} {names[r['ind']]}" for r in market['stocks'][:3] if 'ind' in r) + ')')
     ca = [r for r in market['stocks'] if 'ca' in r]
     print(f"기업행위 진행 중 {len(ca)}종목: " + ', '.join(
         f"{r['n']}({'·'.join(e['k'] + ('!' if e.get('w') else '') for e in r['ca'])})" for r in ca[:30]))

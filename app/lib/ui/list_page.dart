@@ -345,7 +345,7 @@ class ListPageState extends State<ListPage> {
     if (repo.error.isNotEmpty) s.add('불러오기 실패: ${repo.error} · 위의 새로고침을 눌러 보세요');
     if (stocks.isEmpty && !repo.loading && repo.error.isEmpty) s.add('아래로 당기거나 위의 새로고침을 누르세요');
 
-    bool matches(Stock x) => x.name.toLowerCase().contains(_query) || x.ticker.contains(_query);
+    bool matches(Stock x) => x.matches(_query);
     if (widget.summary) {
       // Searching keeps only the matching stocks in each group (and hides the indices and the
       // tally); matches with no signal today are listed last so the answer is always visible.
@@ -452,7 +452,7 @@ class ListPageState extends State<ListPage> {
                 autofocus: true,
                 textInputAction: TextInputAction.search,
                 decoration: InputDecoration(
-                  hintText: '요약에서 종목명 또는 코드 검색',
+                  hintText: '요약에서 종목명·코드·업종·테마 검색',
                   isDense: true,
                   border: const OutlineInputBorder(),
                   contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 13),
@@ -470,7 +470,7 @@ class ListPageState extends State<ListPage> {
               controller: _search,
               textInputAction: TextInputAction.search,
               decoration: InputDecoration(
-                hintText: '종목명 또는 코드 검색',
+                hintText: '종목명·코드·업종·테마 검색',
                 isDense: true,
                 border: const OutlineInputBorder(),
                 contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 13),

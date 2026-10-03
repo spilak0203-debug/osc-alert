@@ -12,6 +12,7 @@ import '../core/settings.dart';
 import '../core/signals.dart' as signals;
 import '../core/stock.dart';
 import 'chart.dart';
+import 'group_sheet.dart';
 import 'holdings_page.dart';
 import 'palette.dart';
 import 'toast.dart';
@@ -53,7 +54,12 @@ class StockTile extends StatelessWidget {
     final p = Palette.of(context);
     final s = stock;
     final hits = signals.hits(s);
-    final sub = [s.ticker, s.market, for (final h in hits) if (h.kind.zone) h.kind.label].join(' · ');
+    final sub = [
+      s.ticker,
+      s.market,
+      if (s.industry.isNotEmpty) s.industry,
+      for (final h in hits) if (h.kind.zone) h.kind.label,
+    ].join(' · ');
     final fav = Settings.I.favorite(s.ticker);
     final head = InkWell(
       onTap: onTap,
@@ -238,6 +244,7 @@ class _StockDetailState extends State<StockDetail> {
     final hits = signals.hits(s);
     const gap = SizedBox(height: 10);
     final info = <Widget>[_metrics(context, s)];
+    if (s.industry.isNotEmpty || s.themes.isNotEmpty) info..add(gap)..add(_sectors(context, s));
     if (hits.isNotEmpty) {
       info
         ..add(gap)
@@ -336,6 +343,34 @@ class _StockDetailState extends State<StockDetail> {
         ),
         child: Text(text, style: Theme.of(context).textTheme.labelMedium!.copyWith(color: strong ? Colors.white : color)),
       );
+
+  /// The industry, then the themes, as small outlined tags (Naver's classification). A tap lists
+  /// the whole industry or theme.
+  Widget _sectors(BuildContext context, Stock s) {
+    final t = Theme.of(context).textTheme;
+    final cs = Theme.of(context).colorScheme;
+    // The industry filled, themes outlined with a #.
+    Widget tag(String name, {required bool theme}) => InkWell(
+          onTap: () => showGroup(context, name, theme: theme),
+          borderRadius: BorderRadius.circular(8),
+          child: Container(
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 4),
+            decoration: BoxDecoration(
+              color: theme ? null : cs.secondaryContainer,
+              border: Border.all(color: theme ? cs.outlineVariant : cs.secondaryContainer),
+              borderRadius: BorderRadius.circular(8),
+            ),
+            child: Text(theme ? '#$name' : name,
+                style: t.labelMedium!.copyWith(
+                    color: theme ? cs.onSurfaceVariant : cs.onSecondaryContainer,
+                    fontWeight: theme ? FontWeight.w500 : FontWeight.w700)),
+          ),
+        );
+    return Wrap(spacing: 6, runSpacing: 6, crossAxisAlignment: WrapCrossAlignment.center, children: [
+      if (s.industry.isNotEmpty) tag(s.industry, theme: false),
+      for (final th in s.themes) tag(th, theme: true),
+    ]);
+  }
 
   /// Corporate actions under way, from DART; a note when today's signals may come from one.
   Widget _actions(BuildContext context, Stock s) {

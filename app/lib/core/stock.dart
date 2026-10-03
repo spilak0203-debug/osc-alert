@@ -19,6 +19,17 @@ class Stock {
   /// Signal-day volume ÷ the previous trading day's (NaN if unknown).
   double volumeTimes = double.nan;
 
+  /// Naver's industry ("반도체와반도체장비", '' if unknown) and themes ("AI", "2차전지", …).
+  String industry = '';
+  List<String> themes = const [];
+
+  /// Whether the name, code, industry or a theme contains `q` (lower case).
+  bool matches(String q) =>
+      name.toLowerCase().contains(q) ||
+      ticker.contains(q) ||
+      industry.toLowerCase().contains(q) ||
+      themes.any((t) => t.toLowerCase().contains(q));
+
   /// Corporate actions under way (bonus or rights issues, reductions, splits, merges).
   List<CorpAction> actions = const [];
 
@@ -28,7 +39,9 @@ class Stock {
   // Live quote (NaN until fetched)
   double livePrice = double.nan, liveChange = double.nan, liveVolume = double.nan;
 
-  static Stock parse(Map<String, dynamic> o) {
+  /// `industries` and `themes` are the snapshot's name lists that `ind` and `th` point into.
+  static Stock parse(Map<String, dynamic> o,
+      {List<String> industries = const [], List<String> themes = const []}) {
     final s = Stock()
       ..ticker = '${o['t'] ?? ''}'
       ..name = '${o['n'] ?? ''}'
@@ -47,6 +60,10 @@ class Stock {
       s.maBreak = (spread: value(mab[0]), volume: value(mab[1]), up60: true, up120: true);
     }
     s.volumeTimes = value(o['vr']);
+    String? at(List<String> names, Object? i) => i is int && i >= 0 && i < names.length ? names[i] : null;
+    s.industry = at(industries, o['ind']) ?? '';
+    final th = o['th'];
+    if (th is List) s.themes = [for (final i in th) ?at(themes, i)];
     final ca = o['ca'];
     if (ca is List) s.actions = [for (final a in ca) ?CorpAction.parse(a)];
     final first = o['rsi'];

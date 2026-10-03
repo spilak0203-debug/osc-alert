@@ -11,6 +11,7 @@ import '../core/signals.dart' as signals;
 import '../platform/app_update.dart';
 import '../platform/notifier.dart';
 import 'home.dart';
+import 'group_sheet.dart';
 import 'settings_page.dart';
 
 /// Smoke test: walks through every screen and saves a screenshot of each into `dir`, then
@@ -125,6 +126,14 @@ class Tour {
       home.select(ma);
       await _pause(8000);
       await shot('3b-ma-breakout');
+    }
+    // An industry's list, as a tap on the tag opens it.
+    if (samsung != null && samsung.industry.isNotEmpty) {
+      final sheet = showGroup(home.context, samsung.industry, theme: false);
+      await _pause(1500);
+      await shot('3c-industry');
+      Navigator.of(home.context).pop();
+      await sheet;
     }
 
     // The holdings tab with sample holdings: one with an average and shares, one with an average
