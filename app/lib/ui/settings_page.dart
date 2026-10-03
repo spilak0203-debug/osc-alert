@@ -103,7 +103,7 @@ class _SettingsPageState extends State<SettingsPage> {
       label('시장'),
       _choice(st.market, const [['all', '전체'], ['코스피', '코스피'], ['코스닥', '코스닥']],
           (v) => st.setString(Settings.filterMarket, v)),
-      label('최솟값 · 비우거나 0이면 제한 없음'),
+      label('적은 금액 이상인 종목만 보여 줍니다 · 비워 두면 제한 없음'),
       _MinField(key: const ValueKey(Settings.filterDv), settingKey: Settings.filterDv, label: '20일 평균 거래대금', unit: '억원'),
       _MinField(key: const ValueKey(Settings.filterCap), settingKey: Settings.filterCap, label: '시가총액', unit: '억원'),
       _MinField(
