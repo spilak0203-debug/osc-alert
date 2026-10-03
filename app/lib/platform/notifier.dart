@@ -4,6 +4,7 @@ import 'dart:typed_data';
 import 'package:flutter/foundation.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 
+import '../core/corporate.dart';
 import '../core/fmt.dart';
 import '../core/holdings.dart';
 import '../core/repo.dart';
@@ -98,15 +99,21 @@ class Notifier {
     await _plugin.resolvePlatformSpecificImplementation<AndroidFlutterLocalNotificationsPlugin>()?.requestNotificationsPermission();
   }
 
-  /// One notification per signal kind, and one for holdings with a falling signal (`holdings`).
-  /// `prefix` marks repeats and tests. Returns how many were posted.
+  /// One notification per signal kind, one for holdings with a falling signal (`holdings`) and
+  /// one for holdings with a corporate action (`corporate`). `prefix` marks repeats and tests.
+  /// Returns how many were posted.
   static Future<int> post(String asof, Map<signals.Kind, List<Stock>> groups, String prefix,
-      [List<Stock> holdings = const []]) async {
+      [List<Stock> holdings = const [], List<Stock> corporate = const []]) async {
     if (!await allowed()) return 0;
     var posted = 0;
     final day = asof.length >= 10 ? asof.substring(5).replaceAll('-', '.') : asof;
     if (holdings.isNotEmpty) {
       await _show(40, null, '$prefix보유종목 하락 신호 ${holdings.length}종목 · $day', _holdingLines(holdings),
+          payload: _holdingsPayload);
+      posted++;
+    }
+    if (corporate.isNotEmpty) {
+      await _show(41, null, '$prefix보유종목 기업행위 ${corporate.length}종목 · $day', corporateLines(corporate),
           payload: _holdingsPayload);
       posted++;
     }
@@ -130,6 +137,15 @@ class Notifier {
       for (final s in rows) '${s.name}  ${[for (final h in of(s)) if (h.falling) h.chip()].join('·')}${_rate(s)}',
     ].join('\n');
   }
+
+  /// "가나전자 · 새 공시 · 무상증자 1주당 0.5주 · 권리락 10/13 (9/30 결정)", and for what is on the
+  /// next trading day "가나전자 · 10/13 권리락 · …" (with the date, so a morning repeat reads right).
+  static String corporateLines(List<Stock> rows) => [
+        for (final s in rows)
+          for (final a in s.actions)
+            if (a.isNew || a.soon.isNotEmpty)
+              '${s.name} · ${a.soon.isNotEmpty ? a.soon.map((x) => '${CorpAction.md(x == '매매정지 시작' ? a.haltFrom : a.change)} $x').join('·') : '새 공시'} · ${a.describe()}',
+      ].join('\n');
 
   static String _rate(Stock s) {
     final h = Holdings.of(s.ticker);
@@ -170,6 +186,15 @@ class Notifier {
       final rows = Holdings.falling(Repo.I.stocks);
       await _show(140, null, '[테스트] 보유종목 하락 신호 ${rows.isEmpty ? 1 : rows.length}종목',
           rows.isEmpty ? '예시종목  데드 3지표 · 수익률 +12.34%\n오늘은 하락 신호가 뜬 보유종목이 없어 예시로 보여 드립니다' : _holdingLines(rows),
+          payload: _holdingsPayload);
+      shown++;
+    }
+    if (Settings.I.flag(Settings.alertCorporate)) {
+      final rows = Holdings.corporate(Repo.I.stocks);
+      await _show(141, null, '[테스트] 보유종목 기업행위 ${rows.isEmpty ? 1 : rows.length}종목',
+          rows.isEmpty
+              ? '예시종목 · 10/13 권리락 · 무상증자 1주당 0.5주 · 권리락 10/13 · 신주 상장 11/5 (9/30 결정)\n오늘은 알릴 기업행위가 없어 예시로 보여 드립니다'
+              : corporateLines(rows),
           payload: _holdingsPayload);
       shown++;
     }

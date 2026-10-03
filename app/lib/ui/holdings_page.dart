@@ -193,7 +193,7 @@ class _HoldingsPageState extends State<HoldingsPage> {
                     ...zones,
                   ].join(' · '),
                   style: t.bodySmall!.copyWith(color: cs.onSurfaceVariant)),
-              SignalChips(hits),
+              SignalChips(hits, actions: s?.actions ?? const []),
             ]),
           ),
           Column(crossAxisAlignment: CrossAxisAlignment.end, children: [

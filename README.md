@@ -26,6 +26,9 @@ Weekdays 15:50 KST   GitHub Actions runs signal/scan.py
                        (uploaded to the `market-data` pre-release; not committed)
                      → market.json: the same, last 2 days only, for app 2.9 and older
                      → signals/latest.json: default-rule confluences (committed, with history)
+                     → corporate actions from DART (bonus/rights issues, reductions, splits,
+                       merges under way) added to market-v2.json — needs the repository secret
+                       DART_API_KEY (free at opendart.fss.or.kr); skipped without it
                      Runs again at 16:40 in case the first run is late.
 Every 30 minutes     The app downloads market-v2.json, evaluates the rule with your settings,
                      and notifies when the signal date changes. Optional repeat at 08:00–09:00.

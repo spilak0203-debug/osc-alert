@@ -19,6 +19,9 @@ class Palette {
   /// the average lines.
   static const maBreak = Color(0xFFD946EF);
 
+  /// Corporate actions (DART): their chips and the "may come from it" warning.
+  static const corporate = Color(0xFFD97706);
+
   /// The average buy price of a holding on the candles.
   static const avgPrice = Color(0xFF0891B2);
 

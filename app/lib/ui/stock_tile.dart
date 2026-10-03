@@ -3,6 +3,7 @@ import 'package:flutter/services.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../core/bars.dart';
+import '../core/corporate.dart';
 import '../core/fmt.dart';
 import '../core/holdings.dart';
 import '../core/repo.dart';
@@ -66,7 +67,7 @@ class StockTile extends StatelessWidget {
             child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
               Text(s.name, maxLines: 1, overflow: TextOverflow.ellipsis, style: t.titleMedium),
               Text(sub, style: t.bodySmall!.copyWith(color: cs.onSurfaceVariant)),
-              SignalChips(hits),
+              SignalChips(hits, actions: s.actions),
             ]),
           ),
           Column(crossAxisAlignment: CrossAxisAlignment.end, children: [
@@ -101,23 +102,28 @@ class StockTile extends StatelessWidget {
   }
 }
 
-/// A row's chips for today's signals (oversold/overbought left out), with the strength first.
+/// A row's chips for today's signals (oversold/overbought left out), with the strength first,
+/// then the stock's corporate actions — and a warning when today's signals may come from one.
 class SignalChips extends StatelessWidget {
-  const SignalChips(this.hits, {super.key});
+  const SignalChips(this.hits, {super.key, this.actions = const []});
 
   final List<signals.Hit> hits;
+  final List<CorpAction> actions;
 
   @override
   Widget build(BuildContext context) {
     final p = Palette.of(context);
     final chips = [for (final h in hits) if (!h.kind.zone) h];
-    if (chips.isEmpty) return const SizedBox.shrink();
+    if (chips.isEmpty && actions.isEmpty) return const SizedBox.shrink();
     final stacked = signals.overlap(hits);
+    final affected = chips.isNotEmpty && actions.any((a) => a.affects);
     return Padding(
       padding: const EdgeInsets.only(top: 4),
       child: Wrap(spacing: 4, runSpacing: 4, children: [
+        if (affected) const _Chip('기업행위 영향', Palette.corporate, solid: true),
         if (stacked >= 2) _Chip(stacked >= 3 ? '매우 높음' : '높음', p.side(true), solid: true),
         for (final h in chips) _Chip(h.chip(), p.side(h.kind.buySide)),
+        for (final a in actions) _Chip(a.chip(), Palette.corporate),
       ]),
     );
   }
@@ -239,6 +245,7 @@ class _StockDetailState extends State<StockDetail> {
           for (final h in hits) _tag(context, h.describe(), p.side(h.kind.buySide), true),
         ]));
     }
+    if (s.actions.isNotEmpty) info..add(gap)..add(_actions(context, s));
     if (s.seq != null) info..add(gap)..add(_indicatorTable(context, s, cfg));
     if (error != null) {
       info.add(Text('차트를 불러오지 못했습니다: $error', style: Theme.of(context).textTheme.bodySmall));
@@ -329,6 +336,22 @@ class _StockDetailState extends State<StockDetail> {
         ),
         child: Text(text, style: Theme.of(context).textTheme.labelMedium!.copyWith(color: strong ? Colors.white : color)),
       );
+
+  /// Corporate actions under way, from DART; a note when today's signals may come from one.
+  Widget _actions(BuildContext context, Stock s) {
+    final t = Theme.of(context).textTheme;
+    return _panel(context, [
+      Text('기업행위 · DART 전자공시', style: t.labelMedium!.copyWith(color: Theme.of(context).colorScheme.onSurfaceVariant)),
+      for (final a in s.actions)
+        Padding(padding: const EdgeInsets.only(top: 4), child: Text(a.describe(), style: t.bodyMedium)),
+      if (s.affected)
+        Padding(
+          padding: const EdgeInsets.only(top: 6),
+          child: Text('오늘 신호는 권리락·재상장으로 가격 기준이 바뀐 탓일 수 있습니다 (그날과 다음 거래일)',
+              style: t.bodySmall!.copyWith(color: Palette.corporate, fontWeight: FontWeight.w700)),
+        ),
+    ]);
+  }
 
   /// Market cap and liquidity side by side.
   Widget _metrics(BuildContext context, Stock s) {

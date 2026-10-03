@@ -77,6 +77,16 @@ class Holdings {
   static Future<void> _save(List<Holding> list) =>
       Settings.I.setString(key, jsonEncode([for (final h in list) h.toJson()]));
 
+  /// Holdings with a corporate action to tell about: decided in the last three days, or
+  /// something on the next trading day (ex-rights, a trading halt, relisting).
+  static List<Stock> corporate(List<Stock> stocks) {
+    final mine = tickers();
+    return [
+      for (final s in stocks)
+        if (mine.contains(s.ticker) && s.actions.any((a) => a.isNew || a.soon.isNotEmpty)) s,
+    ];
+  }
+
   /// Holdings with a falling signal today (dead crossings), for their own notification. The
   /// stock filter does not apply: a holding is always watched.
   static List<Stock> falling(List<Stock> stocks) {

@@ -1,3 +1,4 @@
+import 'corporate.dart';
 import 'rule.dart';
 
 /// One row of market.json plus the live quote, if one has been fetched.
@@ -17,6 +18,12 @@ class Stock {
 
   /// Signal-day volume ÷ the previous trading day's (NaN if unknown).
   double volumeTimes = double.nan;
+
+  /// Corporate actions under way (bonus or rights issues, reductions, splits, merges).
+  List<CorpAction> actions = const [];
+
+  /// Today's signals may come from a change in the price basis (ex-rights or relisting).
+  bool get affected => actions.any((a) => a.affects);
 
   // Live quote (NaN until fetched)
   double livePrice = double.nan, liveChange = double.nan, liveVolume = double.nan;
@@ -40,6 +47,8 @@ class Stock {
       s.maBreak = (spread: value(mab[0]), volume: value(mab[1]), up60: true, up120: true);
     }
     s.volumeTimes = value(o['vr']);
+    final ca = o['ca'];
+    if (ca is List) s.actions = [for (final a in ca) ?CorpAction.parse(a)];
     final first = o['rsi'];
     if (first is List && first.length >= 2) {
       final n = first.length;

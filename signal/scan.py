@@ -28,6 +28,7 @@ import pandas as pd
 import requests
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
+import corporate as corp  # noqa: E402
 import indicators as ind  # noqa: E402
 import rule as rl  # noqa: E402
 
@@ -238,6 +239,9 @@ def run(limit=None, now=None, progress=print):
     end = now.date().strftime('%Y%m%d')
     frames, failed = {}, []
     jobs = [(t, start, end, now) for t in uni.ticker]
+    # 기업행위 공시 목록은 일봉을 받는 동안 따로 받는다.
+    side = concurrent.futures.ThreadPoolExecutor(max_workers=1)
+    dart = side.submit(corp.fetch_rows, now.date(), progress)
     with concurrent.futures.ThreadPoolExecutor(max_workers=WORKERS) as pool:
         for n, (t, f, err) in enumerate(pool.map(scan_one, jobs), 1):
             if f is None:
@@ -261,6 +265,13 @@ def run(limit=None, now=None, progress=print):
         if r and (r['golden'] or r['dead']):
             rows.append(r)
         market.append(market_row(t, info.loc[t], f, day))
+    # 기업행위: [{k 종류, d 결정일, b 기준일, c 가격 기준이 바뀌는 날, hf~ht 매매정지, l 신주 상장일,
+    # e 진행 끝, r 비율, m 증자 방식, w 신호일이 c이거나 다음 거래일, n 새 공시, s 다음 거래일의 일}] — 앱 2.57부터
+    actions = corp.events(frames.keys(), day.date(), dart.result(), progress)
+    side.shutdown()
+    for r in market:
+        if r['t'] in actions:
+            r['ca'] = actions[r['t']]
     market.sort(key=lambda r: -(r['cap'] or 0))
     golden = sorted([r for r in rows if r['golden']], key=lambda r: -(r['dv20'] or 0))
     dead = sorted([r for r in rows if r['dead']], key=lambda r: -(r['dv20'] or 0))
@@ -307,6 +318,9 @@ def main():
           f"(실패 {payload['failed']})")
     print(f"골든 일치 {len(payload['golden'])}건 (거래대금 5억↑ {len(liquid)}건) · "
           f"데드 일치 {len(payload['dead'])}건")
+    ca = [r for r in market['stocks'] if 'ca' in r]
+    print(f"기업행위 진행 중 {len(ca)}종목: " + ', '.join(
+        f"{r['n']}({'·'.join(e['k'] + ('!' if e.get('w') else '') for e in r['ca'])})" for r in ca[:30]))
     mb = [r for r in market['stocks'] if 'mb' in r]
     print(f"이평선 3% 안 돌파 {len(mb)}건 (1.5% 안·60·120 둘 다 상승 {sum('mab' in r for r in mb)}건): "
           + ', '.join(f"{r['n']}{'' if 'mab' in r else '(장기선 ' + ''.join('↑' if u else '↓' for u in r['mb'][2:]) + ')'}"

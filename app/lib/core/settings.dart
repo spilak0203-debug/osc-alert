@@ -28,6 +28,8 @@ class Settings extends ChangeNotifier {
   static const alertMa = 'alertMa', alertCombo = 'alertCombo';
   // A falling signal on one of the user's holdings
   static const alertHoldings = 'alertHoldings';
+  // A corporate action on one of the user's holdings (new filing, ex-rights or a halt next)
+  static const alertCorporate = 'alertCorporate';
   // Two of three indicators count as a signal (off: all three are needed)
   static const pairSignals = 'pairSignals';
   // Moving-average breakout: the 60- / 120-day average must be rising
