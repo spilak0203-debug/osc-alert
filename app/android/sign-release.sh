@@ -75,10 +75,12 @@ check() {
     printf 'sign-release: apksigner verify failed at API %s:\n%s\n' "$sdk" "$out" >&2
     exit 1
   fi
-  got=$(printf '%s\n' "$out" | tr -d '\r' | sed -n 's/^Signer #1 certificate SHA-256 digest: //p' | head -n 1)
+  # build-tools 36 and older print "Signer #1 certificate ...", 37 "V2 Signer: certificate ...".
+  got=$(printf '%s\n' "$out" | tr -d '\r' \
+    | sed -n -E 's/^(Signer #1|V[0-9.]+ Signer:) certificate SHA-256 digest: //p' | head -n 1)
   if [ "$got" != "$want" ]; then
-    printf 'sign-release: API %s sees %s, expected %s\napksigner %s:\n%s\n' \
-      "$sdk" "${got:-no signer}" "$want" "$("$apksigner" --version 2>&1)" "$out" >&2
+    printf 'sign-release: API %s sees %s, expected %s\n%s:\n%s\n' \
+      "$sdk" "${got:-no signer}" "$want" "$apksigner" "$out" >&2
     exit 1
   fi
   echo "API $sdk: $got"
