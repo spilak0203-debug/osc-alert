@@ -113,7 +113,8 @@ jobs:
         run: |
           bt=36.0.0
           if [ ! -x "$ANDROID_HOME/build-tools/$bt/apksigner" ]; then
-            yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --install "build-tools;$bt" >/dev/null
+            # `|| true`: yes ends with SIGPIPE, which would fail the step under pipefail.
+            { yes || true; } | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --install "build-tools;$bt" >/dev/null
           fi
           export APKSIGNER="$ANDROID_HOME/build-tools/$bt/apksigner"
           echo "apksigner $("$APKSIGNER" --version) ($bt)"
