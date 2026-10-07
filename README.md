@@ -133,8 +133,12 @@ properties file has `storeFile` (relative to the file itself), `storePassword`, 
 The original key was committed to this public repository, so it is leaked. Updates must still
 install over the existing app, so `app/android/sign-release.sh` signs the release APK with the new
 key plus a v3 rotation lineage (`app/android/signing-lineage.bin`, public data) that links it to the
-old key. The old key has no rollback or permission rights in the lineage and only signs the v2 block
-for Android 8, which has no rotation support; Android 9 and newer see the new key. The script then
+old key. In the lineage the old key keeps installed data and permission rights and has no rollback,
+shared UID or auth rights: without the permission right the update fails with
+`INSTALL_FAILED_DUPLICATE_PERMISSION`, because the app declares a signature permission (AndroidX's
+`DYNAMIC_RECEIVER_NOT_EXPORTED_PERMISSION`); without rollback, a device that has the rotated app
+refuses updates signed only with the old key. The old key also signs the v2 block for Android 8,
+which has no rotation support; Android 9 and newer see the new key. The script then
 verifies the certificate at API 26 (old), 28 and 33 (new).
 
 ```bash
