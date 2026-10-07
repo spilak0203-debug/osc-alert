@@ -20,7 +20,9 @@ import java.io.InputStream;
 import java.io.OutputStream;
 import java.net.HttpURLConnection;
 import java.net.URL;
+import java.nio.charset.StandardCharsets;
 import java.security.MessageDigest;
+import java.security.SecureRandom;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
@@ -40,7 +42,10 @@ import io.flutter.plugin.common.MethodChannel;
 public class MainActivity extends FlutterActivity {
     private static final String CHANNEL = "kr.personal.oscalert/native";
     private static final String ACTION = "kr.personal.oscalert.INSTALL_RESULT";
+    private static final String EXTRA_TOKEN = "kr.personal.oscalert.INSTALL_TOKEN";
     private static volatile boolean installing;
+    // Unguessable per-install secret, carried only by our own PendingIntent (see the receiver).
+    private static volatile String installToken;
     private BroadcastReceiver installResult;
     private MethodChannel channel;
 
@@ -50,6 +55,10 @@ public class MainActivity extends FlutterActivity {
         installResult = new BroadcastReceiver() {
             @Override
             public void onReceive(Context context, Intent intent) {
+                String expected = installToken;
+                String got = intent.getStringExtra(EXTRA_TOKEN);
+                if (expected == null || got == null || !MessageDigest.isEqual(
+                        expected.getBytes(StandardCharsets.UTF_8), got.getBytes(StandardCharsets.UTF_8))) return;
                 int status = intent.getIntExtra(PackageInstaller.EXTRA_STATUS, PackageInstaller.STATUS_FAILURE);
                 if (status == PackageInstaller.STATUS_PENDING_USER_ACTION) {
                     Intent confirm = intent.getParcelableExtra(Intent.EXTRA_INTENT);
@@ -64,9 +73,11 @@ public class MainActivity extends FlutterActivity {
                 Toast.makeText(MainActivity.this, "설치 실패" + (detail == null ? "" : " · " + detail), Toast.LENGTH_LONG).show();
             }
         };
-        // Not exported on every API level: below 33 ContextCompat guards it with a signature
-        // permission, so only this app's own PackageInstaller status PendingIntent can reach it
-        // (otherwise any app could hand us an EXTRA_INTENT to start under our identity).
+        // Not exported, but that alone is not enough: below 33 ContextCompat only guards the receiver
+        // with a signature permission, which apps signed with our old (leaked) key still hold through
+        // the key-rotation lineage. The per-install token checked in onReceive is what proves the
+        // sender is our own PackageInstaller PendingIntent (otherwise any app could hand us an
+        // EXTRA_INTENT to start under our identity).
         ContextCompat.registerReceiver(this, installResult, new IntentFilter(ACTION),
                 ContextCompat.RECEIVER_NOT_EXPORTED);
     }
@@ -231,8 +242,14 @@ public class MainActivity extends FlutterActivity {
                         for (byte b : digest.digest()) hex.append(String.format("%02x", b));
                         if (sha256 != null && !sha256.equalsIgnoreCase(hex.toString()))
                             throw new IOException("설치 파일 검증에 실패했습니다");
+                        byte[] raw = new byte[16];
+                        new SecureRandom().nextBytes(raw);
+                        StringBuilder tokenHex = new StringBuilder();
+                        for (byte b : raw) tokenHex.append(String.format("%02x", b));
+                        // Kept after commit: the final status arrives after PENDING_USER_ACTION.
+                        installToken = tokenHex.toString();
                         android.app.PendingIntent pending = android.app.PendingIntent.getBroadcast(this, 0,
-                                new Intent(ACTION).setPackage(getPackageName()),
+                                new Intent(ACTION).setPackage(getPackageName()).putExtra(EXTRA_TOKEN, installToken),
                                 android.app.PendingIntent.FLAG_UPDATE_CURRENT | android.app.PendingIntent.FLAG_MUTABLE);
                         session.commit(pending.getIntentSender());
                     }
