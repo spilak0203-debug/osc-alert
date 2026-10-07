@@ -79,21 +79,42 @@ jobs:
           cache: true
       - run: flutter pub get
       - run: flutter test
-      # Prefer the signing key from repository secrets; otherwise use the one in the repository.
-      - name: signing key
+      # The keys come from repository secrets, never from the repository; without all four the
+      # build stops. See "Signing key" in the README.
+      - name: signing keys
         env:
-          KEYSTORE_B64: ${{ secrets.ANDROID_KEYSTORE_B64 }}
+          KEYSTORE_B64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
+          KEY_PROPERTIES: ${{ secrets.ANDROID_KEY_PROPERTIES }}
+          OLD_KEYSTORE_B64: ${{ secrets.ANDROID_OLD_KEYSTORE_BASE64 }}
+          OLD_KEY_PROPERTIES: ${{ secrets.ANDROID_OLD_KEY_PROPERTIES }}
         run: |
-          if [ -n "$KEYSTORE_B64" ]; then echo "$KEYSTORE_B64" | base64 -d > android/app/release.keystore; fi
+          for s in KEYSTORE_B64 KEY_PROPERTIES OLD_KEYSTORE_B64 OLD_KEY_PROPERTIES; do
+            if [ -z "${!s}" ]; then
+              echo "::error::repository secret for $s is empty; see 'Signing key' in the README"
+              exit 1
+            fi
+          done
+          d="$RUNNER_TEMP/osc-signing"
+          mkdir -p "$d"
+          echo "$KEYSTORE_B64" | base64 -d > "$d/android-release.jks"
+          echo "$OLD_KEYSTORE_B64" | base64 -d > "$d/old-release.jks"
+          printf '%s\n' "$KEY_PROPERTIES" > "$d/android-release.properties"
+          printf '%s\n' "$OLD_KEY_PROPERTIES" > "$d/old-release.properties"
+          for f in "$d/android-release.properties" "$d/old-release.properties"; do
+            grep -E '^(storePassword|keyPassword)=' "$f" | cut -d= -f2- | tr -d '\r' | while IFS= read -r v; do
+              if [ -n "$v" ]; then echo "::add-mask::$v"; fi
+            done
+          done
+          echo "OSC_SIGNING_PROPERTIES=$d/android-release.properties" >> "$GITHUB_ENV"
       - name: build
-        env:
-          STORE_PASSWORD: ${{ secrets.ANDROID_KEYSTORE_PASSWORD }}
+        run: flutter build apk --release --dart-define=REPO=${{ github.repository }}
+      # Signs with the old key's rotation lineage and checks the certificate seen at API 26, 28, 33.
+      - name: sign
         run: |
-          if [ -n "$STORE_PASSWORD" ]; then
-            printf 'storePassword=%s\nkeyPassword=%s\n' "$STORE_PASSWORD" "$STORE_PASSWORD" >> android/gradle.properties
-          fi
-          flutter build apk --release --dart-define=REPO=${{ github.repository }}
-          cp build/app/outputs/flutter-apk/app-release.apk ../osc-alert.apk
+          d="$RUNNER_TEMP/osc-signing"
+          bash android/sign-release.sh build/app/outputs/flutter-apk/app-release.apk "$d/signed.apk" \
+            "$d/android-release.properties" "$d/old-release.properties" android/signing-lineage.bin
+          cp "$d/signed.apk" ../osc-alert.apk
       - uses: actions/upload-artifact@v4
         with:
           name: osc-alert-apk

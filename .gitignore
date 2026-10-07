@@ -5,3 +5,8 @@ __pycache__/
 *.apk
 signals/market.json
 signals/market-v2.json
+# Signing keys live outside the repository (~/.secrets/osc-alert).
+*.jks
+*.keystore
+**/android-release.properties
+**/old-release.properties

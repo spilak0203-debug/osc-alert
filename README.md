@@ -123,11 +123,33 @@ emulator and on Windows (`--smoke=<dir>`) and uploads the screenshots.
 
 ## Signing key
 
-`app/android/app/release.keystore` signs every build with the **same key** so updates install over the
-existing app (password `oscalert`). Since this repository is public, anyone can sign with it. To use
-your own key, add the repository secrets `ANDROID_KEYSTORE_B64` (base64 of the keystore) and
-`ANDROID_KEYSTORE_PASSWORD`; the workflow prefers them. Changing the key requires uninstalling and
-reinstalling the app once.
+The Android keys live outside the repository, in `~/.secrets/osc-alert/` (`android-release.jks` and
+`android-release.properties` for the current key, `old-release.*` for the original one). A
+properties file has `storeFile` (relative to the file itself), `storePassword`, `keyAlias` and
+`keyPassword`. The release build reads `OSC_SIGNING_PROPERTIES`, or
+`~/.secrets/osc-alert/android-release.properties` by default, and fails without it; debug builds,
+`flutter analyze` and `flutter test` need no key.
+
+The original key was committed to this public repository, so it is leaked. Updates must still
+install over the existing app, so `app/android/sign-release.sh` signs the release APK with the new
+key plus a v3 rotation lineage (`app/android/signing-lineage.bin`, public data) that links it to the
+old key. The old key has no rollback or permission rights in the lineage and only signs the v2 block
+for Android 8, which has no rotation support; Android 9 and newer see the new key. The script then
+verifies the certificate at API 26 (old), 28 and 33 (new).
+
+```bash
+cd app
+OSC_SIGNING_PROPERTIES=~/.secrets/osc-alert/android-release.properties flutter build apk --release
+APKSIGNER=<sdk>/build-tools/36.0.0/apksigner bash android/sign-release.sh \
+  build/app/outputs/flutter-apk/app-release.apk ../osc-alert.apk \
+  ~/.secrets/osc-alert/android-release.properties ~/.secrets/osc-alert/old-release.properties \
+  android/signing-lineage.bin
+```
+
+The release workflow needs four repository secrets, with no fallback: `ANDROID_KEYSTORE_BASE64` and
+`ANDROID_KEY_PROPERTIES` (new key), `ANDROID_OLD_KEYSTORE_BASE64` and `ANDROID_OLD_KEY_PROPERTIES`
+(old key), each the content of the matching file above. If the new key is lost, the app can only be
+updated after uninstalling and reinstalling it once.
 
 ## Notes
 
