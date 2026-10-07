@@ -1,7 +1,28 @@
+import java.util.Properties
+
 plugins {
     id("com.android.application")
     // The Flutter Gradle Plugin must be applied after the Android and Kotlin Gradle plugins.
     id("dev.flutter.flutter-gradle-plugin")
+}
+
+val signingFile = File(
+    System.getenv("OSC_SIGNING_PROPERTIES")
+        ?: "${System.getProperty("user.home")}/.secrets/osc-alert/android-release.properties"
+)
+val signingProps = Properties()
+if (signingFile.isFile) signingFile.inputStream().use { signingProps.load(it) }
+// Why the release key cannot be used, or null when it can.
+val signingProblem: String? = run {
+    if (!signingFile.isFile) {
+        return@run "Release signing properties not found: $signingFile. Set OSC_SIGNING_PROPERTIES " +
+            "to the properties file of the release key (see \"Signing key\" in the README)."
+    }
+    val missing = listOf("storeFile", "storePassword", "keyAlias", "keyPassword")
+        .filter { signingProps.getProperty(it).isNullOrBlank() }
+    if (missing.isNotEmpty()) return@run "$signingFile is missing: ${missing.joinToString(", ")}"
+    val store = File(signingFile.parentFile, signingProps.getProperty("storeFile"))
+    if (store.isFile) null else "Keystore not found: $store (storeFile in $signingFile)"
 }
 
 android {
@@ -26,14 +47,17 @@ android {
     }
 
     signingConfigs {
-        // Every build must be signed with the same key as the Java app or updates will not
-        // install over it. The workflow swaps in `release.keystore` from repository secrets
-        // when they exist.
+        // The release key lives outside the repository (see "Signing key" in the README). Its
+        // properties file has storeFile (relative to the file itself), storePassword, keyAlias and
+        // keyPassword. Debug builds, the analyzer and the tests work without it; the release
+        // tasks fail below when it is missing.
         create("release") {
-            storeFile = file("release.keystore")
-            storePassword = (project.findProperty("storePassword") as String?) ?: "oscalert"
-            keyAlias = "osc"
-            keyPassword = (project.findProperty("keyPassword") as String?) ?: "oscalert"
+            if (signingProblem == null) {
+                storeFile = File(signingFile.parentFile, signingProps.getProperty("storeFile"))
+                storePassword = signingProps.getProperty("storePassword")
+                keyAlias = signingProps.getProperty("keyAlias")
+                keyPassword = signingProps.getProperty("keyPassword")
+            }
         }
     }
 
@@ -41,6 +65,13 @@ android {
         release {
             signingConfig = signingConfigs.getByName("release")
         }
+    }
+}
+
+// Never fall back to another key: the release build stops here when the signing key is missing.
+tasks.configureEach {
+    if (name == "validateSigningRelease" || name == "packageRelease") {
+        doFirst { signingProblem?.let { throw GradleException(it) } }
     }
 }
 
