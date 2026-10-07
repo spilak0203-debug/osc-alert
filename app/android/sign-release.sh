@@ -69,11 +69,16 @@ done
 
 # Checks the certificate Android sees at one API level.
 check() {
-  local sdk=$1 want=$2 got
-  got=$("$apksigner" verify --print-certs --min-sdk-version "$sdk" --max-sdk-version "$sdk" "$out_apk" \
-    | tr -d '\r' | sed -n 's/^Signer #1 certificate SHA-256 digest: //p' | head -n 1)
+  local sdk=$1 want=$2 out got
+  # The output only holds public certificate data, so it is shown when the check fails.
+  if ! out=$("$apksigner" verify --print-certs --min-sdk-version "$sdk" --max-sdk-version "$sdk" "$out_apk" 2>&1); then
+    printf 'sign-release: apksigner verify failed at API %s:\n%s\n' "$sdk" "$out" >&2
+    exit 1
+  fi
+  got=$(printf '%s\n' "$out" | tr -d '\r' | sed -n 's/^Signer #1 certificate SHA-256 digest: //p' | head -n 1)
   if [ "$got" != "$want" ]; then
-    echo "sign-release: API $sdk sees ${got:-no signer}, expected $want" >&2
+    printf 'sign-release: API %s sees %s, expected %s\napksigner %s:\n%s\n' \
+      "$sdk" "${got:-no signer}" "$want" "$("$apksigner" --version 2>&1)" "$out" >&2
     exit 1
   fi
   echo "API $sdk: $got"

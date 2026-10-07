@@ -108,8 +108,15 @@ jobs:
       - name: build
         run: flutter build apk --release --dart-define=REPO=${{ github.repository }}
       # Signs with the old key's rotation lineage and checks the certificate seen at API 26, 28, 33.
+      # apksigner is pinned to the build-tools the signing was checked with, not the runner's newest.
       - name: sign
         run: |
+          bt=36.0.0
+          if [ ! -x "$ANDROID_HOME/build-tools/$bt/apksigner" ]; then
+            yes | "$ANDROID_HOME/cmdline-tools/latest/bin/sdkmanager" --install "build-tools;$bt" >/dev/null
+          fi
+          export APKSIGNER="$ANDROID_HOME/build-tools/$bt/apksigner"
+          echo "apksigner $("$APKSIGNER" --version) ($bt)"
           d="$RUNNER_TEMP/osc-signing"
           bash android/sign-release.sh build/app/outputs/flutter-apk/app-release.apk "$d/signed.apk" \
             "$d/android-release.properties" "$d/old-release.properties" android/signing-lineage.bin
