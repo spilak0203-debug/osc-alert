@@ -62,6 +62,9 @@ jobs:
   android:
     needs: version
     if: needs.version.outputs.release == 'true'
+    # The four signing secrets exist only as secrets of the Environment `release` (required
+    # reviewer, main only): the job starts after a reviewer approves it in the Actions tab.
+    environment: release
     runs-on: ubuntu-latest
     timeout-minutes: 40
     defaults:
@@ -79,8 +82,8 @@ jobs:
           cache: true
       - run: flutter pub get
       - run: flutter test
-      # The keys come from repository secrets, never from the repository; without all four the
-      # build stops. See "Signing key" in the README.
+      # The keys come from the `release` Environment's secrets, never from the repository; without
+      # all four the build stops. See "Signing key" in the README.
       - name: signing keys
         env:
           KEYSTORE_B64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}
@@ -90,7 +93,7 @@ jobs:
         run: |
           for s in KEYSTORE_B64 KEY_PROPERTIES OLD_KEYSTORE_B64 OLD_KEY_PROPERTIES; do
             if [ -z "${!s}" ]; then
-              echo "::error::repository secret for $s is empty; see 'Signing key' in the README"
+              echo "::error::secret $s of the release environment is empty; see 'Signing key' in the README"
               exit 1
             fi
           done

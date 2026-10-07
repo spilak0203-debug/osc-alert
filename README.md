@@ -150,10 +150,33 @@ APKSIGNER=<sdk>/build-tools/36.0.0/apksigner bash android/sign-release.sh \
   android/signing-lineage.bin
 ```
 
-The release workflow needs four repository secrets, with no fallback: `ANDROID_KEYSTORE_BASE64` and
+The release workflow needs four secrets, with no fallback: `ANDROID_KEYSTORE_BASE64` and
 `ANDROID_KEY_PROPERTIES` (new key), `ANDROID_OLD_KEYSTORE_BASE64` and `ANDROID_OLD_KEY_PROPERTIES`
-(old key), each the content of the matching file above. If the new key is lost, the app can only be
-updated after uninstalling and reinstalling it once.
+(old key), each the content of the matching file above (the keystores base64-encoded). They exist
+only as secrets of the GitHub Environment `release` (Settings → Environments), not as repository
+secrets. Set the environment up with a required reviewer and, under deployment branches, *Selected
+branches* → `main` only. The `android` job of the release workflow uses that environment, so it
+waits after the tests of a new build number: open the run in the Actions tab, press **Review
+deployments** and approve `release`; the signing starts only then. If the new key is lost, the app
+can only be updated after uninstalling and reinstalling it once.
+
+### Keeping keys out of the repository
+
+`tool/check-secrets.sh` fails when a tracked file looks like a signing key: a key file extension
+(`.jks`, `.keystore`, `.p12`, `.pfx`, `.pem`, `.key`), a PEM private key block, the Java keystore
+magic bytes, or a `storePassword`/`keyPassword` line that has a value. It prints the file and the
+reason, never the matching text. It runs in two places:
+
+- **pre-commit hook**: `.githooks/pre-commit` checks the staged files (`tool/check-secrets.sh
+  --staged`). Enable it once per clone:
+
+  ```bash
+  git config core.hooksPath .githooks
+  ```
+
+- **`secret-check` workflow**: on every push and pull request, with no path filter, it runs
+  `bash tool/check-secrets.sh` over all tracked files. The hook can be skipped or never enabled;
+  this check cannot.
 
 ## Notes
 
