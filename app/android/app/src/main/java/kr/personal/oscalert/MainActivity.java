@@ -12,6 +12,7 @@ import android.os.Bundle;
 import android.widget.Toast;
 
 import androidx.annotation.NonNull;
+import androidx.core.content.ContextCompat;
 import androidx.work.WorkManager;
 
 import java.io.IOException;
@@ -63,9 +64,11 @@ public class MainActivity extends FlutterActivity {
                 Toast.makeText(MainActivity.this, "설치 실패" + (detail == null ? "" : " · " + detail), Toast.LENGTH_LONG).show();
             }
         };
-        IntentFilter filter = new IntentFilter(ACTION);
-        if (Build.VERSION.SDK_INT >= 33) registerReceiver(installResult, filter, Context.RECEIVER_NOT_EXPORTED);
-        else registerReceiver(installResult, filter);
+        // Not exported on every API level: below 33 ContextCompat guards it with a signature
+        // permission, so only this app's own PackageInstaller status PendingIntent can reach it
+        // (otherwise any app could hand us an EXTRA_INTENT to start under our identity).
+        ContextCompat.registerReceiver(this, installResult, new IntentFilter(ACTION),
+                ContextCompat.RECEIVER_NOT_EXPORTED);
     }
 
     @Override
