@@ -44,6 +44,18 @@ jobs:
         with:
           channel: stable
           cache: true
+      # Work branches never see the release key: sign with a key made for this run. The APK does
+      # not install over the released app.
+      - name: throwaway signing key
+        run: |
+          d="$RUNNER_TEMP/osc-signing"
+          mkdir -p "$d"
+          pass=$(openssl rand -hex 24)
+          keytool -genkeypair -keystore "$d/throwaway.jks" -storetype PKCS12 -alias throwaway \
+            -keyalg RSA -keysize 2048 -validity 1 -dname "CN=osc-alert throwaway" \
+            -storepass "$pass" -keypass "$pass" >/dev/null
+          printf 'storeFile=throwaway.jks\nstorePassword=%s\nkeyAlias=throwaway\nkeyPassword=%s\n' "$pass" "$pass" > "$d/throwaway.properties"
+          echo "OSC_SIGNING_PROPERTIES=$d/throwaway.properties" >> "$GITHUB_ENV"
       - name: build the Flutter app
         working-directory: app
         run: flutter build apk --release --build-name 2.99999 --build-number 99999 --dart-define=REPO=${{ github.repository }}
