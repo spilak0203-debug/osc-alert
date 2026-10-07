@@ -100,11 +100,10 @@ jobs:
           echo "$OLD_KEYSTORE_B64" | base64 -d > "$d/old-release.jks"
           printf '%s\n' "$KEY_PROPERTIES" > "$d/android-release.properties"
           printf '%s\n' "$OLD_KEY_PROPERTIES" > "$d/old-release.properties"
-          for f in "$d/android-release.properties" "$d/old-release.properties"; do
-            grep -E '^(storePassword|keyPassword)=' "$f" | cut -d= -f2- | tr -d '\r' | while IFS= read -r v; do
-              if [ -n "$v" ]; then echo "::add-mask::$v"; fi
-            done
-          done
+          # Only the new key's passwords: the old key's are public, and masking them would hide the
+          # package name (kr.personal.oscalert) in the logs.
+          grep -E '^(storePassword|keyPassword)=' "$d/android-release.properties" | cut -d= -f2- | tr -d '\r' \
+            | while IFS= read -r v; do if [ -n "$v" ]; then echo "::add-mask::$v"; fi; done
           echo "OSC_SIGNING_PROPERTIES=$d/android-release.properties" >> "$GITHUB_ENV"
       - name: build
         run: flutter build apk --release --dart-define=REPO=${{ github.repository }}

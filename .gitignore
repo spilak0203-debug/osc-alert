@@ -3,6 +3,7 @@ __pycache__/
 *.pyc
 .idea/
 *.apk
+*.apk.idsig
 signals/market.json
 signals/market-v2.json
 # Signing keys live outside the repository (~/.secrets/osc-alert).

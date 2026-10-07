@@ -81,4 +81,10 @@ check() {
 check 26 "$OLD_SHA256"
 check 28 "$NEW_SHA256"
 check 33 "$NEW_SHA256"
+# One signer only: the old key alone for v2, the new key with the lineage for v3.
+signers=$("$apksigner" verify -v "$out_apk" | tr -d '\r' | sed -n 's/^Number of signers: //p')
+if [ "$signers" != 1 ]; then
+  echo "sign-release: expected 1 signer, found ${signers:-none}" >&2
+  exit 1
+fi
 echo "signed: $out_apk"
