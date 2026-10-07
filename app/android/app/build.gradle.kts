@@ -69,8 +69,10 @@ android {
 }
 
 // Never fall back to another key: the release build stops here when the signing key is missing.
+// (validateSigningRelease is not registered at all without a key; packageRelease covers the APK and
+// signReleaseBundle the app bundle.)
 tasks.configureEach {
-    if (name == "validateSigningRelease" || name == "packageRelease") {
+    if (name == "packageRelease" || name == "signReleaseBundle") {
         doFirst { signingProblem?.let { throw GradleException(it) } }
     }
 }
