@@ -163,7 +163,7 @@ can only be updated after uninstalling and reinstalling it once.
 ### Keeping keys out of the repository
 
 `tool/check-secrets.sh` fails when a tracked file looks like a signing key: a key file extension
-(`.jks`, `.keystore`, `.p12`, `.pfx`, `.pem`, `.key`), a PEM private key block, the Java keystore
+(`.jks`, `.keystore`, `.jceks`, `.bks`, `.p12`, `.pfx`, `.pem`, `.key`, `.p8`), a PEM private key block, JKS or JCEKS keystore
 magic bytes, or a `storePassword`/`keyPassword` line that has a value. It prints the file and the
 reason, never the matching text. It runs in two places:
 
