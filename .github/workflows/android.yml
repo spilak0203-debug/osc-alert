@@ -61,7 +61,11 @@ jobs:
 
   android:
     needs: version
-    if: needs.version.outputs.release == 'true'
+    # Main only: the Environment `release` accepts no other branch, so a run started from another
+    # branch (workflow_dispatch) skips this job instead of failing on it.
+    if: needs.version.outputs.release == 'true' && github.ref == 'refs/heads/main'
+    # A newer run replaces one that still waits for approval, so only the latest can be approved.
+    concurrency: { group: release-android-${{ github.ref }}, cancel-in-progress: true }
     # The four signing secrets exist only as secrets of the Environment `release` (required
     # reviewer, main only): the job starts after a reviewer approves it in the Actions tab.
     environment: release
