@@ -9,6 +9,7 @@ import android.content.pm.PackageInstaller;
 import android.net.Uri;
 import android.os.Build;
 import android.os.Bundle;
+import android.util.Log;
 import android.widget.Toast;
 
 import androidx.annotation.NonNull;
@@ -58,7 +59,12 @@ public class MainActivity extends FlutterActivity {
                 String expected = installToken;
                 String got = intent.getStringExtra(EXTRA_TOKEN);
                 if (expected == null || got == null || !MessageDigest.isEqual(
-                        expected.getBytes(StandardCharsets.UTF_8), got.getBytes(StandardCharsets.UTF_8))) return;
+                        expected.getBytes(StandardCharsets.UTF_8), got.getBytes(StandardCharsets.UTF_8))) {
+                    // Logged so that a broken token round trip does not fail silently.
+                    Log.w("osc-alert", "install result ignored: " + (expected == null ? "no install in this process"
+                            : got == null ? "no token" : "token mismatch"));
+                    return;
+                }
                 int status = intent.getIntExtra(PackageInstaller.EXTRA_STATUS, PackageInstaller.STATUS_FAILURE);
                 if (status == PackageInstaller.STATUS_PENDING_USER_ACTION) {
                     Intent confirm = intent.getParcelableExtra(Intent.EXTRA_INTENT);
@@ -246,7 +252,10 @@ public class MainActivity extends FlutterActivity {
                         new SecureRandom().nextBytes(raw);
                         StringBuilder tokenHex = new StringBuilder();
                         for (byte b : raw) tokenHex.append(String.format("%02x", b));
-                        // Kept after commit: the final status arrives after PENDING_USER_ACTION.
+                        // Kept after commit: the final status arrives after PENDING_USER_ACTION. The
+                        // PendingIntent below always reuses requestCode 0 with FLAG_UPDATE_CURRENT, so
+                        // its token is always the latest installToken; with per-session request codes
+                        // or FLAG_CANCEL_CURRENT, results of an earlier session would be refused.
                         installToken = tokenHex.toString();
                         android.app.PendingIntent pending = android.app.PendingIntent.getBroadcast(this, 0,
                                 new Intent(ACTION).setPackage(getPackageName()).putExtra(EXTRA_TOKEN, installToken),
