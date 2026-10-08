@@ -155,17 +155,32 @@ The release workflow needs four secrets, with no fallback: `ANDROID_KEYSTORE_BAS
 (old key), each the content of the matching file above (the keystores base64-encoded). They exist
 only as secrets of the GitHub Environment `release` (Settings → Environments), not as repository
 secrets. Set the environment up with a required reviewer and, under deployment branches, *Selected
-branches* → `main` only. The `android` job of the release workflow uses that environment, so it
-waits after the tests of a new build number: open the run in the Actions tab, press **Review
-deployments** and approve `release`; the signing starts only then. If the new key is lost, the app
-can only be updated after uninstalling and reinstalling it once.
+branches* → `main` only. The `android` job of the release workflow uses that environment. For a
+new build number the `check` job is skipped and `flutter test` runs inside the `android` job, so the
+job waits for approval before anything else in it: open the run in the Actions tab, press **Review
+deployments** and approve `release`; the tests, the build and the signing start only then. A newer
+run on the same branch replaces a run that is still waiting, and on any other branch the job is
+skipped. If the new key is lost, the app can only be updated after uninstalling and reinstalling it
+once.
 
 ### Keeping keys out of the repository
 
-`tool/check-secrets.sh` fails when a tracked file looks like a signing key: a key file extension
-(`.jks`, `.keystore`, `.jceks`, `.bks`, `.p12`, `.pfx`, `.pem`, `.key`, `.p8`), a PEM private key block, JKS or JCEKS keystore
-magic bytes, or a `storePassword`/`keyPassword` line that has a value. It prints the file and the
-reason, never the matching text. It runs in two places:
+`tool/check-secrets.sh` fails when a file looks like a signing key. It prints the file and the
+reason, never the matching text. The rules:
+
+- a key file extension: `.jks`, `.keystore`, `.jceks`, `.bks`, `.p12`, `.pfx`, `.pem`, `.key`, `.p8`,
+  `.pk8`;
+- a PEM private key block;
+- keystore or key magic bytes at the start of any file, whatever its name: JKS (`FE ED FE ED`),
+  JCEKS (`CE CE CE CE`), PKCS12 (`30 82 .. .. 02 01 03`) and PKCS#8 DER (`30 82 .. .. 02 01 00`,
+  also the short `30 81 ..` form);
+- base64 text of a keystore (the encoding of the JKS, JCEKS or PKCS12 header) in a text file;
+- a `storePassword` or `keyPassword` that is given a value: `name=value` in any text file, `name =
+  value`, `name: value` and `name value` in `.properties`, a quoted literal after the name (or after
+  `?:`) in `.gradle` / `.gradle.kts`, `name: value` in YAML and JSON. A value that starts with `$`
+  or `%`, an empty value, and a name used as an argument (`getProperty("storePassword")`) are fine.
+
+It runs in three places:
 
 - **pre-commit hook**: `.githooks/pre-commit` checks the staged files (`tool/check-secrets.sh
   --staged`). Enable it once per clone:
@@ -174,9 +189,20 @@ reason, never the matching text. It runs in two places:
   git config core.hooksPath .githooks
   ```
 
-- **`secret-check` workflow**: on every push and pull request, with no path filter, it runs
-  `bash tool/check-secrets.sh` over all tracked files. The hook can be skipped or never enabled;
-  this check cannot.
+- **`secret-check` workflow**: on every push and pull request, with no path filter. It first runs
+  the self-test (`bash tool/check-secrets-test.sh`), then `tool/check-secrets.sh --range <base>
+  <head>` over every file that any commit of the push or pull request added or changed (so a key
+  that is deleted again in the next commit is still reported), then `tool/check-secrets.sh` over all
+  tracked files of HEAD. For a push the range starts at the previous tip (`github.event.before`), or
+  at the merge-base with the default branch for a new branch or a force-push; for a pull request it
+  is base to head.
+- by hand: `bash tool/check-secrets.sh --range <base> <head>` checks any commit range.
+
+What this does not do: the workflow runs after the push, so it only detects a leak that is already
+public; it does not prevent it. The hook can be skipped or never enabled, `[skip ci]` in a commit
+message skips the workflow, and `main` has no branch protection that would require the check. If it
+reports a key or a password, treat that key as leaked and replace it (see above); deleting the file
+in a later commit does not help.
 
 ## Notes
 
