@@ -7,11 +7,14 @@ import 'package:scrollable_positioned_list/scrollable_positioned_list.dart';
 
 import '../core/fmt.dart';
 import '../core/market_index.dart';
+import '../core/news.dart';
 import '../core/repo.dart';
 import '../core/settings.dart';
 import '../core/signals.dart' as signals;
 import '../core/stock.dart';
+import 'briefing_card.dart';
 import 'chart.dart';
+import 'group_sheet.dart';
 import 'palette.dart';
 import 'stock_tile.dart';
 
@@ -288,6 +291,13 @@ class ListPageState extends State<ListPage> {
   /// Summary: puts the signal tally, or a part's title, at the top.
   void showTally() => scrollToIndex(math.max(0, _list.indexWhere((o) => o is _Counts)));
 
+  /// Summary: the briefing, unfolded, at the top (from its notification).
+  void showBriefing() {
+    if (_searching) closeSearch();
+    if (!Settings.I.flag(Settings.briefingOpen)) Settings.I.setFlag(Settings.briefingOpen, true);
+    WidgetsBinding.instance.addPostFrameCallback((_) => scrollToIndex(0));
+  }
+
   void showBlock(signals.Block b) {
     final at = _list.indexWhere((o) => o is _Block && o.block == b);
     if (at >= 0) scrollToIndex(at);
@@ -352,6 +362,9 @@ class ListPageState extends State<ListPage> {
       final searching = _query.isNotEmpty;
       final groups = signals.group(stocks);
       if (!searching) {
+        // The pre-market briefing on top, until it is a week old.
+        final b = repo.briefing;
+        if (b != null && st.flag(Settings.showBriefing) && b.age(seoulDate(seoulNow())) <= 7) items.add(b);
         items.addAll(repo.indices);
         items.add(_Counts(groups));
       }
@@ -713,6 +726,15 @@ class ListPageState extends State<ListPage> {
   }
 
   Widget _item(BuildContext context, Object o) {
+    if (o is Briefing) {
+      final open = Settings.I.flag(Settings.briefingOpen);
+      return BriefingCard(
+        briefing: o,
+        open: open,
+        onToggle: () => Settings.I.setFlag(Settings.briefingOpen, !open),
+        onStock: _openStock,
+      );
+    }
     if (o is MarketIndex) return _indexCard(context, o);
     if (o is _Counts) return _countsCard(context, o);
     if (o is _Section) return _sectionHeader(context, o);
@@ -737,6 +759,15 @@ class ListPageState extends State<ListPage> {
         }
       },
     );
+  }
+
+  /// A stock named outside the lists (the briefing): the side pane on wide windows, else its own page.
+  void _openStock(Stock s) {
+    if (widget.wide) {
+      widget.onSelect?.call(s);
+    } else {
+      Navigator.of(context).push(MaterialPageRoute<void>(builder: (_) => StockPage(stock: s)));
+    }
   }
 
   Widget _card(BuildContext context, {required Widget child, EdgeInsets padding = EdgeInsets.zero}) => Card.filled(

@@ -10,6 +10,7 @@ import 'holdings.dart';
 import 'live.dart';
 import 'market_index.dart';
 import 'net.dart';
+import 'news.dart';
 import 'signals.dart' as signals;
 import 'stock.dart';
 
@@ -27,6 +28,9 @@ class Repo extends ChangeNotifier {
 
   List<Stock> stocks = const [];
   List<MarketIndex> indices = const [];
+
+  /// The pre-market briefing (news.json), if one has been written yet.
+  Briefing? briefing;
   String asof = '', error = '';
   DateTime? quotesAt;
   bool loading = false;
@@ -69,17 +73,20 @@ class Repo extends ChangeNotifier {
         changed();
       }
     } catch (_) {}
+    briefing ??= await News.cached();
     await refresh(false);
   }
 
-  /// Re-downloads market.json, the indices and live quotes. `allQuotes` fetches every stock's
-  /// price (stocks tab); otherwise only the stocks that currently signal (dashboard) and the
-  /// user's holdings.
+  /// Re-downloads market.json, the briefing, the indices and live quotes. `allQuotes` fetches every
+  /// stock's price (stocks tab); otherwise only the stocks that currently signal (dashboard) and
+  /// the user's holdings.
   Future<void> refresh(bool allQuotes) async {
     if (loading) return;
     loading = true;
     changed();
     var err = '';
+    // Small and optional: fetched alongside; a failure keeps the one shown.
+    final news = News.download().then<Briefing?>((b) => b, onError: (Object _) => null);
     try {
       final fresh = await download();
       stocks = fresh;
@@ -108,6 +115,7 @@ class Repo extends ChangeNotifier {
     } catch (e) {
       err = '$e';
     }
+    briefing = await news ?? briefing;
     error = err;
     loading = false;
     changed();

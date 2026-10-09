@@ -7,6 +7,7 @@ import 'package:flutter_local_notifications/flutter_local_notifications.dart';
 import '../core/corporate.dart';
 import '../core/fmt.dart';
 import '../core/holdings.dart';
+import '../core/news.dart';
 import '../core/repo.dart';
 import '../core/settings.dart';
 import '../core/signals.dart' as signals;
@@ -25,11 +26,16 @@ class Notifier {
   /// A holdings notification was tapped: open the holdings tab.
   static final ValueNotifier<bool> tappedHoldings = ValueNotifier(false);
 
-  static const _holdingsPayload = 'holdings';
+  /// The briefing's notification was tapped: open it on the dashboard.
+  static final ValueNotifier<bool> tappedBriefing = ValueNotifier(false);
+
+  static const _holdingsPayload = 'holdings', _briefingPayload = 'briefing';
 
   static void _tap(String? payload) {
     if (payload == _holdingsPayload) {
       tappedHoldings.value = true;
+    } else if (payload == _briefingPayload) {
+      tappedBriefing.value = true;
     } else {
       tapped.value = signals.Kind.byName(payload);
     }
@@ -130,6 +136,12 @@ class Notifier {
     return posted;
   }
 
+  /// The pre-market briefing: its headline, and the key points when expanded.
+  static Future<void> briefing(Briefing b, {String prefix = ''}) async {
+    if (!await allowed()) return;
+    await _show(42, null, '$prefix장 시작 전 브리핑 · ${b.day}', b.notificationText(), payload: _briefingPayload);
+  }
+
   /// Each holding with its falling signal and gain.
   static String _holdingLines(List<Stock> rows) {
     final of = signals.hitsNow();
@@ -196,6 +208,17 @@ class Notifier {
               ? '예시종목 · 10/13 권리락 · 무상증자 1주당 0.5주 · 권리락 10/13 · 신주 상장 11/5 (9/30 결정)\n오늘은 알릴 기업행위가 없어 예시로 보여 드립니다'
               : corporateLines(rows),
           payload: _holdingsPayload);
+      shown++;
+    }
+    if (Settings.I.flag(Settings.alertBriefing)) {
+      final b = Repo.I.briefing;
+      if (b != null && b.headline.isNotEmpty) {
+        await briefing(b, prefix: '[테스트] ');
+      } else {
+        await _show(142, null, '[테스트] 장 시작 전 브리핑 · 예시',
+            '반도체 강세 속 환율 부담\n· 간밤 나스닥 1% 상승\n· 원/달러 1,380원대\n아직 올라온 브리핑이 없어 예시로 보여 드립니다',
+            payload: _briefingPayload);
+      }
       shown++;
     }
     if (shown == 0) {

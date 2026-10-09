@@ -3,7 +3,8 @@
 Scans every KOSPI and KOSDAQ stock after the close and notifies your phone when **three
 oscillators match** — all golden-cross (or all dead-cross) together. The app, "매매 시그널 알림",
 runs on Android and Windows from one Flutter code base (`app/`). It lets you tune the rule, shows a
-dashboard and charts for every stock, and updates itself from this repository's releases.
+dashboard and charts for every stock, and updates itself from this repository's releases. Before
+the open on trading days it also shows a news briefing that Claude writes from the overnight news.
 
 | | Golden confluence (buy) | Dead confluence (sell) |
 |---|---|---|
@@ -30,8 +31,17 @@ Weekdays 15:50 KST   GitHub Actions runs signal/scan.py
                        merges under way) added to market-v2.json — needs the repository secret
                        DART_API_KEY (free at opendart.fss.or.kr); skipped without it
                      Runs again at 16:40 in case the first run is late.
+Weekdays 07:20 KST   GitHub Actions runs signal/news.py (skipped on KRX holidays)
+                     → headlines since the last close from news RSS feeds (Yonhap, Hankyung,
+                       Maeil, Google News search)
+                     → Claude summarises them, checking the US close and the won with web search
+                     → news.json: headline, three key points, sections with their sources, stocks
+                       to watch (uploaded to `market-data`; not committed) — needs the repository
+                       secret ANTHROPIC_API_KEY; skipped with a warning without it
+                     Runs again at 08:00 in case the first run is late.
 Every 30 minutes     The app downloads market-v2.json, evaluates the rule with your settings,
                      and notifies when the signal date changes. Optional repeat at 08:00–09:00.
+                     Between 07:00 and 09:00 on trading days it announces the briefing once.
                      (Android: a WorkManager job. Windows: the app keeps running in the tray.)
 ```
 
@@ -47,8 +57,10 @@ doesn't change, so nothing is sent.
 
 - **Top bar**: the close the signals are from and the market session (open, closed, holiday — on
   holidays the latest trading day is shown), plus a refresh button.
-- **요약 (Dashboard)**: KOSPI and KOSDAQ charts, a tally per signal kind (3- and 2-indicator
-  matches, oversold/overbought entry and exit), and the stocks of each kind.
+- **요약 (Dashboard)**: the pre-market briefing (headline and three key points; a tap unfolds the
+  sections, each point with tags that open its source articles, and the stocks it names, which open
+  their charts), KOSPI and KOSDAQ charts, a tally per signal kind (3- and 2-indicator matches,
+  oversold/overbought entry and exit), and the stocks of each kind.
 - **종목 (Stocks)**: every stock, searchable.
 - Tap any stock to expand: per-indicator state, candles with 5/20/60/120-day moving averages,
   and stochastic, RSI and CCI panels (each can be toggled). Matching spans are shaded, crosses are
@@ -72,6 +84,10 @@ Prices shown live come from Naver quote endpoints; pull down to refresh.
    apps" once) or `osc-alert-setup.exe` on Windows (installs per user, no administrator rights).
    Later versions install from inside the app.
 3. **First signal**: Actions → `daily-signal` → Run workflow, then pull to refresh in the app.
+4. **Briefing** (optional): an Anthropic API key (console.anthropic.com) as the repository secret
+   `ANTHROPIC_API_KEY` (Settings → Secrets and variables → Actions). Then Actions → `daily-news` →
+   Run workflow (tick *force* outside a trading morning). The repository variable `NEWS_MODEL`
+   picks another model than `claude-opus-5-5`, e.g. `claude-sonnet-5-5` at about half the cost.
 
 If notifications arrive late or not at all, disable **battery optimization** for the app.
 
@@ -106,6 +122,7 @@ snapshot and never counts as the latest release.
 python -m venv .venv
 .venv\Scripts\pip install -r requirements.txt
 .venv\Scripts\python signal/scan.py --limit 50 --dry-run
+.venv\Scripts\python signal/news.py --dry-run --force   # needs ANTHROPIC_API_KEY
 .venv\Scripts\python -m unittest discover -s tests -v
 ```
 
@@ -209,4 +226,8 @@ in a later commit does not help.
 - Scheduled GitHub runs can start late, so alerts usually arrive between 16:00 and 16:30 KST.
 - Uses unofficial Naver endpoints. If they change or block access, `daily-signal` fails and shows
   red in the Actions tab.
+- The briefing costs one Claude call per trading day plus up to five web searches. The run's log
+  ends with the tokens and searches it used; expect roughly $0.2–0.7 a day on Opus. Claude only
+  cites articles it was given or pages its search returned (other links are dropped), but a
+  summary can still be wrong — the app says so and links every point to its sources.
 - This is a signal notifier, not financial advice.
