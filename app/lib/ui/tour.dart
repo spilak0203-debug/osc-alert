@@ -5,6 +5,8 @@ import 'package:flutter/rendering.dart';
 import 'package:flutter/material.dart';
 
 import '../core/holdings.dart';
+import '../core/market_index.dart';
+import '../core/news.dart';
 import '../core/repo.dart';
 import '../core/settings.dart';
 import '../core/signals.dart' as signals;
@@ -60,6 +62,15 @@ class Tour {
     await _waitData();
     await shot('1-summary');
     final summary = home.summaryKey.currentState!;
+    // The briefing unfolded — a sample when none has been written yet.
+    final briefing = Repo.I.briefing, briefingOpen = Settings.I.flag(Settings.briefingOpen);
+    Repo.I.briefing ??= Briefing.parse(_sampleBriefing());
+    Repo.I.changed();
+    summary.showBriefing();
+    await shot('1i-briefing');
+    await Settings.I.setFlag(Settings.briefingOpen, briefingOpen);
+    Repo.I.briefing = briefing;
+    Repo.I.changed();
     await summary.scrollBy(900);
     await shot('1b-summary-lower');
     summary.holdBar(0.55);
@@ -189,3 +200,37 @@ class Tour {
     AppUpdate.progress.value = null;
   }
 }
+
+/// A made-up briefing for the screenshots, shaped like news.json.
+Map<String, dynamic> _sampleBriefing() => {
+      'date': seoulDate(seoulNow()),
+      'generated': DateTime.now().toUtc().toIso8601String(),
+      'model': 'claude-opus-5-5',
+      'articles': 64,
+      'headline': '(예시) 반도체 강세 속 환율 부담',
+      'key': ['간밤 나스닥 1.2% 상승, 반도체지수 2%대 강세', '원/달러 환율 1,380원대, 외국인 수급 변수', '오늘 9시 삼성전자 잠정실적 발표'],
+      'sections': [
+        {
+          'title': '간밤 해외 시장',
+          'items': [
+            {'text': '나스닥이 1.2% 올라 사상 최고치를 다시 썼다. AI 반도체주가 이끌었다.', 'src': [0]},
+            {'text': '미 국채 10년물 금리는 4.1%대로 소폭 내렸다.', 'src': [1]},
+          ],
+        },
+        {
+          'title': '국내 이슈',
+          'items': [
+            {'text': '삼성전자 3분기 잠정실적이 오늘 나온다. 메모리 가격 반등 폭이 관심이다.', 'src': [2]},
+          ],
+        },
+      ],
+      'stocks': [
+        {'name': '삼성전자', 'note': '오늘 잠정실적 발표'},
+        {'name': 'SK하이닉스', 'note': '미 반도체주 강세'},
+      ],
+      'sources': [
+        {'title': '예시 기사', 'press': '연합뉴스', 'url': 'https://www.yna.co.kr'},
+        {'title': '예시 기사', 'press': '한국경제', 'url': 'https://www.hankyung.com'},
+        {'title': '예시 기사', 'press': '매일경제', 'url': 'https://www.mk.co.kr'},
+      ],
+    };

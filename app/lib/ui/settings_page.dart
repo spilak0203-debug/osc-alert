@@ -77,6 +77,8 @@ class _SettingsPageState extends State<SettingsPage> {
       if (pairs) _toggle(Settings.alert2, '2지표 일치', '셋 중 둘만 일치해도 따로 알림'),
       _toggle(Settings.alertZoneIn, '과매도·과매수 진입', "'신호 조건'의 구간 판단 지표 수 이상이 구간에 새로 들어온 날"),
       _toggle(Settings.alertZoneOut, '과매도·과매수 탈출', '구간에 있던 지표가 빠져나온 날'),
+      sub('뉴스'),
+      _toggle(Settings.alertBriefing, '장 시작 전 브리핑', '거래일 아침 07~09시, Claude(AI)가 간밤 해외 증시·국내 뉴스를 정리한 브리핑이 올라오면 알림'),
       sub('보내는 방식'),
       _toggle(Settings.preMarket, '장 시작 전에도 알림', '다음 거래일 08시대에 같은 알림을 한 번 더'),
       _toggle(Settings.quietDays, '신호 없는 날에도 알림', '켜진 알림 종류에 맞는 종목이 없다는 알림'),
@@ -161,6 +163,7 @@ class _SettingsPageState extends State<SettingsPage> {
           OutlinedButton(onPressed: () => _changeFont(1), child: const Text('가+')),
         ]),
       ),
+      _toggle(Settings.showBriefing, '요약 탭에 장 시작 전 브리핑', 'Claude(AI)가 거래일 아침에 정리한 뉴스를 지수 위에 카드로 (눌러서 펼치기)'),
       label(Platform.isAndroid ? '종목을 길게 누르면 복사할 것' : '종목을 길게 누르거나 오른쪽 클릭하면 복사할 것'),
       _choice(st.flag(Settings.copyName) ? 'name' : 'code', const [['code', '종목코드'], ['name', '종목명']],
           (v) => st.setFlag(Settings.copyName, v == 'name')),
@@ -196,6 +199,7 @@ class _SettingsPageState extends State<SettingsPage> {
       if (pairs && st.flag(Settings.alert2)) '2지표',
       if (st.flag(Settings.alertZoneIn)) '과매도·과매수 진입',
       if (st.flag(Settings.alertZoneOut)) '과매도·과매수 탈출',
+      if (st.flag(Settings.alertBriefing)) '장 전 브리핑',
     ];
     final summaries = {
       _Group.rules: '${pairs ? '2지표도 신호' : '3지표만 신호'} · 허용 기간 ${window == 0 ? '당일' : '$window일'} · '

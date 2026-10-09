@@ -1,0 +1,55 @@
+name: daily-news
+
+# Before the KRX open on trading days: Claude reads the news since the last close and writes the
+# pre-market briefing (signals/news.json), uploaded to the `market-data` pre-release next to
+# market-v2.json for the app's summary tab. Needs the repository secret ANTHROPIC_API_KEY; without
+# it the run only leaves a warning. The repository variable NEWS_MODEL picks another model.
+# Scheduled runs can start late, so there are two; the second does nothing once today's is up.
+on:
+  schedule:
+    - cron: '20 22 * * 0-4'   # 07:20 KST, Mon–Fri
+    - cron: '0 23 * * 0-4'    # 08:00 KST (in case the first run is late or fails)
+  workflow_dispatch:
+    inputs:
+      force:
+        description: 'Write a new briefing even if today has one or the market is closed'
+        type: boolean
+        default: false
+
+permissions:
+  contents: write
+
+concurrency:
+  group: daily-news
+  cancel-in-progress: false
+
+jobs:
+  brief:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: '3.12'
+          cache: pip
+      - run: pip install -r requirements.txt
+      - run: python -m unittest tests.test_news -v
+      - name: today's briefing so far
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release download market-data -p news.json -D signals --clobber || echo "no briefing yet"
+      - id: brief
+        run: python signal/news.py ${{ inputs.force && '--force' || '' }}
+        env:
+          ANTHROPIC_API_KEY: ${{ secrets.ANTHROPIC_API_KEY }}
+          NEWS_MODEL: ${{ vars.NEWS_MODEL }}
+      - name: upload the briefing
+        if: steps.brief.outputs.written == '1'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          gh release view market-data >/dev/null 2>&1 || \
+            gh release create market-data --prerelease --title "Market data" \
+              --notes "Daily indicator snapshot for the app. Replaced after every scan."
+          gh release upload market-data signals/news.json --clobber

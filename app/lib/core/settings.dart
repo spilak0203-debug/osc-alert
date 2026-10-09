@@ -30,6 +30,8 @@ class Settings extends ChangeNotifier {
   static const alertHoldings = 'alertHoldings';
   // A corporate action on one of the user's holdings (new filing, ex-rights or a halt next)
   static const alertCorporate = 'alertCorporate';
+  // The pre-market briefing (Claude's news summary) is up; it shows on top of the summary
+  static const alertBriefing = 'alertBriefing', showBriefing = 'showBriefing';
   // Two of three indicators count as a signal (off: all three are needed)
   static const pairSignals = 'pairSignals';
   // Moving-average breakout: the 60- / 120-day average must be rising
@@ -37,8 +39,8 @@ class Settings extends ChangeNotifier {
   // Moving-average breakout: how close the four averages must be, % of the close
   static const maSpreadKey = 'maSpread';
   static const maSpreads = ['1', '1.5', '2', '3'];
-  // Summary: the oversold/overbought groups are unfolded
-  static const showZones = 'showZones';
+  // Summary: the oversold/overbought groups are unfolded, and the briefing card
+  static const showZones = 'showZones', briefingOpen = 'briefingOpen';
   static const preMarket = 'preMarket', quietDays = 'quietDays';
   static const soundKey = 'sound'; // sound | vibrate | both | silent
   // Rule
@@ -62,7 +64,7 @@ class Settings extends ChangeNotifier {
   // Desktop
   static const trayOnClose = 'trayOnClose', startWithWindows = 'startWithWindows';
   // Bookkeeping
-  static const notified = 'notified', preMarketSent = 'preMarketSent';
+  static const notified = 'notified', preMarketSent = 'preMarketSent', briefingSent = 'briefingSent';
 
   static const double fontMin = 0.7, fontMax = 2.0, fontStep = 0.1;
 
@@ -75,6 +77,7 @@ class Settings extends ChangeNotifier {
       case alertZoneOut:
       case alertMa:
       case showZones:
+      case briefingOpen:
       case pairSignals:
       case preMarket:
       case quietDays:

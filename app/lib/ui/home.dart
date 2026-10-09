@@ -41,10 +41,12 @@ class HomeState extends State<Home> {
     super.initState();
     Notifier.tapped.addListener(_openTapped);
     Notifier.tappedHoldings.addListener(_openHoldings);
+    Notifier.tappedBriefing.addListener(_openBriefing);
     WidgetsBinding.instance.addPostFrameCallback((_) {
       Repo.I.ensure();
       _openTapped();
       _openHoldings();
+      _openBriefing();
       _offerUpdate();
       Notifier.askPermission();
     });
@@ -54,6 +56,7 @@ class HomeState extends State<Home> {
   void dispose() {
     Notifier.tapped.removeListener(_openTapped);
     Notifier.tappedHoldings.removeListener(_openHoldings);
+    Notifier.tappedBriefing.removeListener(_openBriefing);
     settingsScroll.dispose();
     super.dispose();
   }
@@ -72,6 +75,14 @@ class HomeState extends State<Home> {
     if (!Notifier.tappedHoldings.value) return;
     Notifier.tappedHoldings.value = false;
     show(holdingsTab);
+  }
+
+  /// From the briefing's notification: the dashboard with the briefing unfolded on top.
+  void _openBriefing() {
+    if (!Notifier.tappedBriefing.value) return;
+    Notifier.tappedBriefing.value = false;
+    show(0);
+    WidgetsBinding.instance.addPostFrameCallback((_) => summaryKey.currentState?.showBriefing());
   }
 
   void jumpTo(signals.Kind kind) {
